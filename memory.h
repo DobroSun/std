@@ -12,6 +12,7 @@ void      report_all_memory_leaks(struct array<struct Allocation_Chunk>*);
 
 
 struct Memory_Arena {
+  Allocator allocator;
 	void*  memory;
 	size_t top;
 	size_t allocated;
@@ -49,17 +50,21 @@ static       Allocator global_allocator          = logging_allocator(&allocation
 #define EXPAND(x) x
 
 #define GET_MACRO(_1, _2, NAME, ...) NAME
-#define alloc(...)    EXPAND(GET_MACRO(__VA_ARGS__, alloc2,   alloc1)(__VA_ARGS__))
-#define dealloc(...)  EXPAND(GET_MACRO(__VA_ARGS__, dealloc2, dealloc1)(__VA_ARGS__))
+#define GET_MACRO3(_1, _2, _3, NAME, ...) NAME
+#define alloc(...)       EXPAND(GET_MACRO(__VA_ARGS__, alloc2,   alloc1)(__VA_ARGS__))
+#define dealloc(...)     EXPAND(GET_MACRO(__VA_ARGS__, dealloc2, dealloc1)(__VA_ARGS__))
+#define my_realloc(...)  EXPAND(GET_MACRO3(__VA_ARGS__, realloc3, realloc2, realloc1)(__VA_ARGS__)) // @Rename: 
 
-#define alloc2(allocator, bytes) __alloc(allocator,        bytes, { __LINE__, __FILE__, __func__ })
-#define alloc1(bytes)            __alloc(global_allocator, bytes, { __LINE__, __FILE__, __func__ })
-#define dealloc2(allocator, ptr) __dealloc(allocator,        ptr, { __LINE__, __FILE__, __func__ })
-#define dealloc1(ptr)            __dealloc(global_allocator, ptr, { __LINE__, __FILE__, __func__ })
+#define alloc2(allocator, bytes)        __alloc(allocator,        bytes,        { __LINE__, __FILE__, __func__ })
+#define alloc1(bytes)                   __alloc(global_allocator, bytes,        { __LINE__, __FILE__, __func__ })
+#define dealloc2(allocator, ptr)        __dealloc(allocator,        ptr,        { __LINE__, __FILE__, __func__ })
+#define dealloc1(ptr)                   __dealloc(global_allocator, ptr,        { __LINE__, __FILE__, __func__ })
+#define realloc3(allocator, ptr, bytes) __realloc(allocator,        ptr, bytes, { __LINE__, __FILE__, __func__ })
+#define realloc2(ptr, bytes)            __realloc(global_allocator, ptr, bytes, { __LINE__, __FILE__, __func__ })
 
-
-void* __alloc(Allocator allocator, size_t bytes, Source_Location loc) { return allocator.allocate(allocator.allocator_data, bytes, loc); }
-void  __dealloc(Allocator allocator, void* ptr, Source_Location loc)  { return allocator.deallocate(allocator.allocator_data, ptr, loc); }
+void* __alloc(Allocator allocator, size_t bytes,              Source_Location loc) { return allocator.allocate(allocator.allocator_data, bytes, loc); }
+void  __dealloc(Allocator allocator, void* ptr,               Source_Location loc) { return allocator.deallocate(allocator.allocator_data, ptr, loc); }
+void* __realloc(Allocator allocator, void* ptr, size_t bytes, Source_Location loc) { return allocator.reallocate(allocator.allocator_data, ptr, bytes, loc); }
 
 void* default_allocate(void* data, size_t bytes, Source_Location loc) {
   return malloc(bytes);
@@ -67,6 +72,10 @@ void* default_allocate(void* data, size_t bytes, Source_Location loc) {
 
 void  default_deallocate(void* data, void* ptr, Source_Location loc)  {
   return free(ptr);
+}
+
+void* default_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
+    return realloc(ptr, bytes);
 }
 
 
@@ -97,6 +106,26 @@ void  log_deallocate(void* data, void* ptr, Source_Location loc) {
   }
 
   free(ptr);
+}
+
+void* log_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
+    void* r = realloc(ptr, bytes);
+
+    Allocation_Storage* storage = (Allocation_Storage*)data;
+    Allocation_Chunk* found = array_find_by_predicate(&storage->error_reports, [=](Allocation_Chunk& it) {
+        return it.ptr == ptr;
+    });
+
+    Allocation_Chunk chunk;
+    chunk.ptr = r;
+    chunk.allocated = bytes;
+    chunk.loc = loc;
+    if (found) {
+        *found = chunk;
+    } else {
+        array_add(&storage->error_reports, chunk);
+    }
+    return r;
 }
 
 void print_formatted_number(size_t n) {
@@ -140,7 +169,7 @@ void report_all_memory_leaks(array<Allocation_Chunk>* error_reports) {
 
 void* arena_allocate(void* data, size_t bytes, Source_Location loc) {
 	Memory_Arena* arena = (Memory_Arena*) data;
-	assert(arena->top + bytes < arena->allocated);
+	assert(arena->top + bytes <= arena->allocated);
 	void* r = (char*)arena->memory + arena->top;
 	arena->top += bytes;
 	return r;
@@ -149,11 +178,15 @@ void* arena_allocate(void* data, size_t bytes, Source_Location loc) {
 void arena_deallocate(void* data, void* ptr, Source_Location loc) {
 }
 
-Allocator begin_memory_arena(Memory_Arena* arena, size_t bytes = 5e6) {
-	arena->memory = alloc(global_internal_allocator, bytes);
-	arena->top = 0;
-	arena->allocated = bytes;
-  return memory_arena_allocator(arena);
+void* arena_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
+    return arena_allocate(data, bytes, loc);
+}
+
+void begin_memory_arena(Memory_Arena* arena, size_t bytes = 5e6) {
+  arena->memory = alloc(global_internal_allocator, bytes);
+  arena->top = 0;
+  arena->allocated = bytes;
+  arena->allocator = memory_arena_allocator(arena);
 }
 
 void reset_memory_arena(Memory_Arena* arena) {
@@ -165,8 +198,8 @@ void end_memory_arena(Memory_Arena* arena) {
 }
 
 
-Allocator default_allocator()                      { return { default_allocate, default_deallocate, NULL }; }
-Allocator logging_allocator(Allocation_Storage* s) { return { log_allocate, log_deallocate, s }; }
-Allocator memory_arena_allocator(Memory_Arena* a)  { return { arena_allocate, arena_deallocate, a }; }
+Allocator default_allocator()                      { return { default_allocate, default_deallocate, default_reallocate, NULL }; }
+Allocator logging_allocator(Allocation_Storage* s) { return { log_allocate, log_deallocate, log_reallocate, s }; }
+Allocator memory_arena_allocator(Memory_Arena* a)  { return { arena_allocate, arena_deallocate, arena_reallocate, a }; }
 
 inline Allocator get_global_allocator() { return global_allocator; }

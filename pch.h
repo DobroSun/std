@@ -13,7 +13,7 @@
 
 
 struct Source_Location {
-  size_t      line;
+  long long   line;
   const char* file;
   const char* function;
 };
@@ -22,7 +22,7 @@ struct Source_Location {
 struct Allocator {
   void* (*allocate)(void* data, size_t bytes, Source_Location location);
   void  (*deallocate)(void* data, void* ptr, Source_Location location);
-//void  (*reallocate)(void* data, void* ptr, Source_Location location);
+  void* (*reallocate)(void* data, void* ptr, size_t bytes, Source_Location location);
   void* allocator_data;
 };
 inline Allocator get_global_allocator();
@@ -112,6 +112,7 @@ struct array {
 static uint64 ARRAY_INDEX_NOT_FOUND = -1;
 
 template<class T>          T* array_add(array<T>*);
+template<class T>          T* array_add(array<T>*, T);
 template<class T, class F> T* array_find_by_predicate(array<T>*, F);
 template<class T>          T* array_pop(array<T>*);
 template<class T>          void array_free(array<T>*);

@@ -1,6 +1,9 @@
 #pragma once
 
 #define GROW_FUNCTION(x) (2*(x) + 8)
+#define max(x, y) ( ((x) > (y)) ? (x) : (y) )
+
+#define temp_array(type, N) { (type*) alloca(sizeof(type) * N), N, N, get_global_allocator() }
 
 // start static_array
 template<class T, uint64 N>
@@ -54,13 +57,9 @@ uint64 array_index(static_array<T, N>* a, T v) {
 // start of array
 template<class T>
 void array_reserve(array<T>* a, s64 new_capacity) {
-  assert(new_capacity > a->capacity && "array<T>;:reserve new_capacity is <= then array one, can't do anything!");
+  //assert(new_capacity > a->capacity && "array<T>;:reserve new_capacity is <= then array one, can't do anything!");
 
-  T* new_data = (T*) alloc(a->allocator, sizeof(T)*new_capacity); // @Incomplete: realloc.
-  memcpy(new_data, a->data, sizeof(T)*a->size);
-  array_free(a);
-
-  a->data     = new_data;
+  a->data = (T*) my_realloc(a->allocator, a->data, sizeof(T)*new_capacity);
   a->capacity = new_capacity;
 }
 
@@ -75,6 +74,16 @@ T* array_add(array<T>* a) {
 template<class T>
 T* array_add(array<T>* a, T v) {
   return &(*array_add(a) = v);
+}
+
+template<class T>
+void array_add(array<T>* a, const array<T>* b) {
+  if (a->size + b->size > a->capacity) {
+    size_t new_capacity = a->size + b->size;
+    array_reserve(a, new_capacity);
+  }
+  memmove(a->data + a->size, b->data, sizeof(T) * b->size);
+  a->size += b->size;
 }
 
 template<class T, class F>
@@ -123,8 +132,8 @@ T* array_remove(array<T>* a, size_t index) {
   s64 size_to_copy = a->size - index;
 
   T tmp[size_to_copy];
-  memcpy(tmp, a->data+index+1, sizeof(tmp)); // @CleanUp: memmove?
-  memcpy(a->data+index, tmp, sizeof(tmp));
+  memmove(tmp, a->data+index+1, sizeof(tmp)); // @CleanUp: memmove?
+  memmove(a->data+index, tmp, sizeof(tmp));
   return r;
 }
 
@@ -161,7 +170,7 @@ void array_copy(array<T>* a, const array<T>* b) {
     a->data     = (T*) alloc(a->allocator, sizeof(T)*b->capacity);
     a->capacity = b->capacity;
   }
-  memcpy(a->data, b->data, sizeof(T)*b->size);
+  memmove(a->data, b->data, sizeof(T)*b->size);
   a->size = b->size;
 }
 
@@ -171,8 +180,25 @@ array<T> array_copy(const array<T>* b) {
   a.data     = (T*) alloc(a.allocator, sizeof(T)*b->capacity);
   a.size     = b->size;
   a.capacity = b->capacity;
-  memcpy(a.data, b->data, sizeof(T)*b->size);
+  memmove(a.data, b->data, sizeof(T)*b->size);
   return a;
+}
+
+template<class T>
+array<T> array_copy(const T* data, size_t size) {
+  array<T> b;
+  b.data = (T*) data;
+  b.size = size;
+  b.capacity = size;
+  return array_copy(&b);
+}
+
+template<class T>
+void array_copy_range(array<T>* a, const array<T>* b, size_t first, size_t last) {
+  assert(first <= b->size && last <= b->size);
+  size_t size = last - first;
+  array_resize(a, size);
+  memmove(a->data, &b->data[first], sizeof(T) * size);
 }
 
 template<class T>
@@ -181,5 +207,6 @@ void array_free(array<T>* a) {
 }
 // end of array.
 
+#undef max
 #undef GROW_FUNCTION
 
