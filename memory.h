@@ -8,6 +8,7 @@ Allocator default_allocator();
 Allocator logging_allocator(struct Allocation_Storage*);
 Allocator logging_allocator();
 Allocator memory_arena_allocator(struct Memory_Arena*);
+Allocator temporary_storage_allocator(struct Temporary_Storage*);
 void      report_all_memory_leaks(struct array<struct Allocation_Chunk>*);
 
 
@@ -16,6 +17,11 @@ struct Memory_Arena {
 	void*  memory;
 	size_t top;
 	size_t allocated;
+};
+
+struct Temporary_Storage {
+	Memory_Arena arena;
+	size_t highest_water_value;
 };
 
 struct Allocation_Chunk {
@@ -46,6 +52,8 @@ static       Allocation_Storage allocation_storage;                             
 static const Allocator global_internal_allocator = logging_allocator(&allocation_storage); // @ThreadSafety: 
 static       Allocator global_allocator          = logging_allocator(&allocation_storage); // @ThreadSafety: 
 #endif
+
+static Temporary_Storage temporary_storage;
 
 #define EXPAND(x) x
 
@@ -197,9 +205,39 @@ void end_memory_arena(Memory_Arena* arena) {
   dealloc(global_internal_allocator, arena->memory);
 }
 
+void* temporary_allocate(void* data, size_t bytes, Source_Location loc) {
+	Temporary_Storage* storage = (Temporary_Storage*) data;
+
+  void* r = arena_allocate(&storage->arena, bytes, loc);
+  storage->highest_water_value = max(storage->arena.top, storage->highest_water_value);
+	return r;
+}
+
+void temporary_deallocate(void* data, void* ptr, Source_Location loc) {
+}
+
+void* temporary_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
+    return temporary_allocate(data, bytes, loc);
+}
+
+void begin_temporary_storage(Temporary_Storage* storage, size_t bytes = 5e6) {
+  begin_memory_arena(&storage->arena);
+  storage->arena.allocator = temporary_storage_allocator(storage);
+  storage->highest_water_value = 0;
+}
+
+void reset_temporary_storage(Temporary_Storage* storage) {
+  reset_memory_arena(&storage->arena);
+}
+
+void end_temporary_storage(Temporary_Storage* storage) {
+  end_memory_arena(&storage->arena);
+}
+
 
 Allocator default_allocator()                      { return { default_allocate, default_deallocate, default_reallocate, NULL }; }
 Allocator logging_allocator(Allocation_Storage* s) { return { log_allocate, log_deallocate, log_reallocate, s }; }
 Allocator memory_arena_allocator(Memory_Arena* a)  { return { arena_allocate, arena_deallocate, arena_reallocate, a }; }
+Allocator temporary_storage_allocator(Temporary_Storage* s) { return { temporary_allocate, temporary_deallocate, temporary_reallocate, s }; }
 
 inline Allocator get_global_allocator() { return global_allocator; }

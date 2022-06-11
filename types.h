@@ -35,6 +35,8 @@ typedef uint64 u64;
 typedef float  f32;
 typedef double f64;
 
+typedef uint32 uint;
+
 static_assert(sizeof(s8)  == sizeof(u8), "");
 static_assert(sizeof(s16) == sizeof(u16), "");
 static_assert(sizeof(s32) == sizeof(u32), "");

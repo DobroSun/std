@@ -11,6 +11,14 @@
 #include <iostream>
 #include <chrono>
 
+#define static_array_size(x) ((int)(sizeof((x)) / sizeof(*(x))))
+#define measure_scope() Timer ANONYMOUS_NAME;
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define abs(a)    (((a) > 0)  ? (a) : -(a))
+#define square(a) ((a)*(a))
+
+
 
 struct Source_Location {
   long long   line;

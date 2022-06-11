@@ -185,6 +185,59 @@ inline size_t write_format(char *r, size_t cursor, const char *fmt, ...) {
 // print("{} + {} = {}", 1, 2, 3)    -> "1 + 2 = 3"
 // 
 
+#if 0
+struct Format_String_Info {
+  array<uint> format_positions;
+  uint        num_format_args;
+};
+
+Format_String_Info check_format_string(literal s) {
+  Format_String_Info info = {};
+
+  const char* cursor = s.data;
+  uint count = 0;
+
+  while (*cursor != '\0') {
+    if (*cursor == '%') { 
+      info.num_format_args += 1;
+      array_add(&info.format_positions, count);
+    }
+    cursor += 1;
+    count  += 1;
+  }
+
+  return info;
+}
+
+template<class T>
+void print_unit(T unit);
+
+template<>
+void print_unit(const char* unit) {
+  printf(unit);
+}
+
+template<class T, class ...Args>
+void print(const char *s, T first, Args... rest) {
+  literal l = { s, strlen(s) }; // @Incomplete: @AsciiOnly: 
+  Format_String_Info info = check_format_string(l);
+
+  defer { array_free(&info.format_positions); }; // @Incomplete: @UseTemporaryStorage: 
+
+  uint previous_pos = 0;
+  for (size_t i = 0; i < info.num_format_args; i++) {
+    uint format_pos = info.format_positions[i];
+    literal p = { &s[previous_pos], format_pos-previous_pos };
+    if (p.size > 0) {
+      printf("%.*s", p.size, p.data);
+    }
+
+    print_unit(first);
+    previous_pos = format_pos+1;
+  }
+  return;
+}
+#else 
 template<class T> class array;
 
 template<class T>
@@ -210,11 +263,8 @@ void print_obj(array<T> a) {
 size_t inline print_count(const char *s) {
   size_t count = 0;
   while(s[count]) {
-    if(s[count] == '{') {
-      size_t tmp = count+1;
-      if(s[tmp++] == '}') {
-        break;
-      }
+    if(s[count] == '%') {
+      break;
     }
     count++;
   }
@@ -225,7 +275,7 @@ size_t inline print_count(const char *s) {
 void inline print(const char *s) {
   size_t count = print_count(s);
   if(s[count]) {
-    s += count+2;
+    s += count+1;
     print(s);
   }
 }
@@ -236,7 +286,7 @@ void print(const char *s, T first, Args... rest) {
 
   if(s[count]) {
     print_obj(first);
-    s += count+2;
+    s += count+1;
     print(s, rest...);
   }
 }
@@ -259,6 +309,7 @@ void print(T first, Args... rest) {
   printf(", ");
   print(rest...);
 }
+#endif
 
 struct Timer {
   std::chrono::steady_clock::time_point start;
