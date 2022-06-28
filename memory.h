@@ -158,8 +158,11 @@ void report_all_memory_leaks(array<Allocation_Chunk>* error_reports) {
   size_t total = 0;
   for(const Allocation_Chunk& it : *error_reports) {
     if(it.allocated) {
-      printf("%s: %zu: %s  \t::\twas allocated ", it.loc.file, it.loc.line, it.loc.function);
-      print_formatted_number(it.allocated);
+      // 
+      // @Incomplete: line up all strings on ':' symbols.
+      // 
+      printf("%s: %zu: %s <---- was allocated ", it.loc.file, it.loc.line, it.loc.function); // @Incomplete: forward declare print and use it in here.
+      print_formatted_number(it.allocated); // @Incomplete: handle this through print. Maybe create some format string to specify stuff in bytes.
       printf(", but never freed!\n");
       total += it.allocated;
     }

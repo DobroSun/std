@@ -56,48 +56,50 @@ uint64 array_index(static_array<T, N>* a, T v) {
 
 // start of array
 template<class T>
-void array_reserve(array<T>* a, s64 new_capacity) {
+void array_reserve(array<T>* a, s64 new_capacity, Source_Location loc) {
   //assert(new_capacity > a->capacity && "array<T>;:reserve new_capacity is <= then array one, can't do anything!");
 
-  a->data = (T*) reallocate(a->allocator, a->data, sizeof(T)*new_capacity);
+  a->data = (T*) __realloc(a->allocator, a->data, sizeof(T)*new_capacity, loc);
   a->capacity = new_capacity;
 }
 
 template<class T>
-T* array_add(array<T>* a) {
+T* array_add_(array<T>* a, Source_Location loc) {
   if(a->size == a->capacity) {
-    array_reserve(a, GROW_FUNCTION(a->capacity));
+    array_reserve(a, GROW_FUNCTION(a->capacity), loc);
   }
   return &a->data[a->size++];
 }
 
 template<class T>
-T* array_add(array<T>* a, T v) {
-  return &(*array_add(a) = v);
+T* array_add_(array<T>* a, T v, Source_Location loc) {
+  return &(*array_add_(a, loc) = v);
 }
 
 template<class T>
-void array_add(array<T>* a, T* v) {
+void array_add_(array<T>* a, T* v, Source_Location loc) {
   while (*v) {
-    array_add(a, *v);
+    array_add_(a, *v, loc);
     v++;
   }
 }
 
 template<class T>
-void array_add(array<T>* a, T* v, size_t s) {
+void array_add_(array<T>* a, T* v, size_t s, Source_Location loc) {
   size_t i = 0;
   while (i < s) {
-    array_add(a, v[i]);
+    array_add_(a, v[i], loc);
     i++;
   }
 }
 
+#define array_add(...) array_add_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
+
 template<class T>
-void array_add(array<T>* a, const array<T>* b) {
+void array_add_(array<T>* a, const array<T>* b, Source_Location loc) {
   if (a->size + b->size > a->capacity) {
     size_t new_capacity = a->size + b->size;
-    array_reserve(a, new_capacity);
+    array_reserve(a, new_capacity, loc);
   }
   memmove(a->data + a->size, b->data, sizeof(T) * b->size); // @Incomplete: memcpy
   a->size += b->size;

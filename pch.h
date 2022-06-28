@@ -119,11 +119,14 @@ struct array {
 
 static uint64 ARRAY_INDEX_NOT_FOUND = -1;
 
-template<class T>          T* array_add(array<T>*);
-template<class T>          T* array_add(array<T>*, T);
+template<class T>          T* array_add_(array<T>*, Source_Location);
+template<class T>          T* array_add_(array<T>*, T, Source_Location);
 template<class T, class F> T* array_find_by_predicate(array<T>*, F);
 template<class T>          T* array_pop(array<T>*);
 template<class T>          void array_free(array<T>*);
+
+// @Ugh: What about release build? 
+#define array_add(...) array_add_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
 
 #include "memory.h"
 #include "array.h"
