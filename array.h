@@ -59,7 +59,7 @@ template<class T>
 void array_reserve(array<T>* a, s64 new_capacity) {
   //assert(new_capacity > a->capacity && "array<T>;:reserve new_capacity is <= then array one, can't do anything!");
 
-  a->data = (T*) my_realloc(a->allocator, a->data, sizeof(T)*new_capacity);
+  a->data = (T*) reallocate(a->allocator, a->data, sizeof(T)*new_capacity);
   a->capacity = new_capacity;
 }
 
@@ -77,12 +77,29 @@ T* array_add(array<T>* a, T v) {
 }
 
 template<class T>
+void array_add(array<T>* a, T* v) {
+  while (*v) {
+    array_add(a, *v);
+    v++;
+  }
+}
+
+template<class T>
+void array_add(array<T>* a, T* v, size_t s) {
+  size_t i = 0;
+  while (i < s) {
+    array_add(a, v[i]);
+    i++;
+  }
+}
+
+template<class T>
 void array_add(array<T>* a, const array<T>* b) {
   if (a->size + b->size > a->capacity) {
     size_t new_capacity = a->size + b->size;
     array_reserve(a, new_capacity);
   }
-  memmove(a->data + a->size, b->data, sizeof(T) * b->size);
+  memmove(a->data + a->size, b->data, sizeof(T) * b->size); // @Incomplete: memcpy
   a->size += b->size;
 }
 

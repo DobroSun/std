@@ -56,12 +56,11 @@ static       Allocator global_allocator          = logging_allocator(&allocation
 static Temporary_Storage temporary_storage;
 
 #define EXPAND(x) x
-
 #define GET_MACRO(_1, _2, NAME, ...) NAME
 #define GET_MACRO3(_1, _2, _3, NAME, ...) NAME
 #define alloc(...)       EXPAND(GET_MACRO(__VA_ARGS__, alloc2,   alloc1)(__VA_ARGS__))
 #define dealloc(...)     EXPAND(GET_MACRO(__VA_ARGS__, dealloc2, dealloc1)(__VA_ARGS__))
-#define my_realloc(...)  EXPAND(GET_MACRO3(__VA_ARGS__, realloc3, realloc2, realloc1)(__VA_ARGS__)) // @Rename: 
+#define reallocate(...)  EXPAND(GET_MACRO3(__VA_ARGS__, realloc3, realloc2, realloc1)(__VA_ARGS__)) // @Rename: 
 
 #define alloc2(allocator, bytes)        __alloc(allocator,        bytes,        { __LINE__, __FILE__, __func__ })
 #define alloc1(bytes)                   __alloc(global_allocator, bytes,        { __LINE__, __FILE__, __func__ })
@@ -70,9 +69,9 @@ static Temporary_Storage temporary_storage;
 #define realloc3(allocator, ptr, bytes) __realloc(allocator,        ptr, bytes, { __LINE__, __FILE__, __func__ })
 #define realloc2(ptr, bytes)            __realloc(global_allocator, ptr, bytes, { __LINE__, __FILE__, __func__ })
 
-void* __alloc(Allocator allocator, size_t bytes,              Source_Location loc) { return allocator.allocate(allocator.allocator_data, bytes, loc); }
-void  __dealloc(Allocator allocator, void* ptr,               Source_Location loc) { return allocator.deallocate(allocator.allocator_data, ptr, loc); }
-void* __realloc(Allocator allocator, void* ptr, size_t bytes, Source_Location loc) { return allocator.reallocate(allocator.allocator_data, ptr, bytes, loc); }
+void* __alloc(Allocator allocator, size_t bytes,              Source_Location loc) { return allocator.allocate_(allocator.allocator_data, bytes, loc); }
+void  __dealloc(Allocator allocator, void* ptr,               Source_Location loc) { return allocator.deallocate_(allocator.allocator_data, ptr, loc); }
+void* __realloc(Allocator allocator, void* ptr, size_t bytes, Source_Location loc) { return allocator.reallocate_(allocator.allocator_data, ptr, bytes, loc); }
 
 void* default_allocate(void* data, size_t bytes, Source_Location loc) {
   return malloc(bytes);
@@ -239,5 +238,6 @@ Allocator default_allocator()                      { return { default_allocate, 
 Allocator logging_allocator(Allocation_Storage* s) { return { log_allocate, log_deallocate, log_reallocate, s }; }
 Allocator memory_arena_allocator(Memory_Arena* a)  { return { arena_allocate, arena_deallocate, arena_reallocate, a }; }
 Allocator temporary_storage_allocator(Temporary_Storage* s) { return { temporary_allocate, temporary_deallocate, temporary_reallocate, s }; }
+Allocator temp_allocator()                         { return temporary_storage_allocator(&temporary_storage); }
 
 inline Allocator get_global_allocator() { return global_allocator; }

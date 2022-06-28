@@ -50,30 +50,30 @@ template<class T> inline const Defer<T> operator+(Junk, const T f) { return f; }
 
 struct literal {
   const char *data;
-  size_t      size;
+  size_t      count;
 
   char operator[](size_t i) const {
-    assert(i < size);
+    assert(i < count);
     return data[i];
   }
 };
 
 // #define make_literal(x) (literal){ (x), sizeof(x)-1 }
-literal inline XXX_visual_studio_sucks(const char* x, size_t s) { return { x, s }; }
+inline literal XXX_visual_studio_sucks(const char* x, size_t s) { return { x, s }; }
 #define make_literal(x) XXX_visual_studio_sucks((x), sizeof(x)-1)
 
 
-inline bool operator==(char s, literal l) { return l.size == 1 && l.data[0] == s; }
-inline bool operator==(literal l, char s) { return l.size == 1 && l.data[0] == s; }
+inline bool operator==(char s, literal l) { return l.count == 1 && l.data[0] == s; }
+inline bool operator==(literal l, char s) { return l.count == 1 && l.data[0] == s; }
 
-inline bool operator==(const char *s, literal l) { return l.size && !strncmp(s, l.data, l.size); }
-inline bool operator==(literal l, const char *s) { return l.size && !strncmp(s, l.data, l.size); }
+inline bool operator==(const char *s, literal l) { return l.count && !strncmp(s, l.data, l.count); }
+inline bool operator==(literal l, const char *s) { return l.count && !strncmp(s, l.data, l.count); }
 inline bool operator!=(const char *s, literal l) { return !(s == l); }
 inline bool operator!=(literal l, const char *s) { return !(s == l); }
 
 inline bool operator==(literal l1, literal l2) {
-  if(l1.size == l2.size) {
-    return !strncmp(l1.data, l2.data, l1.size);
+  if(l1.count == l2.count) {
+    return !strncmp(l1.data, l2.data, l1.count);
   } else {
     return false;
   }
@@ -82,19 +82,19 @@ inline bool operator==(literal l1, literal l2) {
 inline bool operator!=(literal l1, literal l2) { return !(l1 == l2); }
 
 inline std::ostream& operator<<(std::ostream &os, literal l) {
-  for(size_t i = 0; i < l.size; i++) {
+  for(size_t i = 0; i < l.count; i++) {
     os << l.data[i];
   }
   return os;
 }
 
 #define static_string_from_literal(name, l) \
-  char name[l.size+1] = {}; \
-  memcpy(name, l.data, l.size);
+  char name[l.count+1] = {}; \
+  memcpy(name, l.data, l.count);
 
 inline char *dynamic_string_from_literal(literal l) {
-  char *r = (char *)alloc(l.size+1);
-  memcpy(r, l.data, l.size);
+  char *r = (char *)alloc(l.count+1);
+  memcpy(r, l.data, l.count);
   return r;
 }
 
@@ -109,7 +109,7 @@ inline size_t write_string(char *r, size_t cursor, const char *s, size_t size) {
 }
 
 inline size_t write_string(char *r, size_t cursor, literal l) {
-  return write_string(r, cursor, l.data, l.size);
+  return write_string(r, cursor, l.data, l.count);
 }
 
 inline size_t write_string(char *r, size_t cursor, const char *s) {
@@ -170,14 +170,6 @@ inline size_t write_format(char *r, size_t cursor, const char *fmt, ...) {
 }
 
 
-#define static_array_size(x) ((int)(sizeof((x)) / sizeof(*(x))))
-#define measure_scope() Timer ANONYMOUS_NAME;
-#define max(a, b) (((a) > (b)) ? (a) : (b))
-#define min(a, b) (((a) < (b)) ? (a) : (b))
-#define abs(a)    (((a) > 0)  ? (a) : -(a))
-#define square(a) ((a)*(a))
-
-
 // 
 // function: print(format, args...)
 // print("hello {}{}", "world", '!') -> "hello world!"
@@ -228,8 +220,8 @@ void print(const char *s, T first, Args... rest) {
   for (size_t i = 0; i < info.num_format_args; i++) {
     uint format_pos = info.format_positions[i];
     literal p = { &s[previous_pos], format_pos-previous_pos };
-    if (p.size > 0) {
-      printf("%.*s", p.size, p.data);
+    if (p.count > 0) {
+      printf("%.*s", p.count, p.data);
     }
 
     print_unit(first);
@@ -242,7 +234,12 @@ template<class T> class array;
 
 template<class T>
 void print_obj(T obj) {
-  std::cout << obj;
+  std::cout << obj; // @Incomplete: do the thing for every thing.
+}
+
+template<>
+void inline print_obj<void*>(void* obj) {
+  printf("%p", obj);
 }
 
 template<>
@@ -250,12 +247,17 @@ void inline print_obj<bool>(bool obj) {
   printf("%s", (obj) ? "true" : "false");
 }
 
+template<>
+void inline print_obj<literal>(literal obj) {
+  printf("%.*s", (int) obj.count, obj.data);
+}
+
 template<class T>
 void print_obj(array<T> a) {
   printf("[");
   for(s64 index = 0; index < a->size; index++) {
     print_obj(a[index]);
-    printf("%s", ((index != a.size-1) ? ", " : ""));
+    printf("%s", ((index != a.count-1) ? ", " : ""));
   }
   printf("]");
 }
@@ -321,11 +323,11 @@ struct Timer {
   
     const f64 delta = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     if(delta < 1000.) {
-      print("{} ns", delta);
+      print("% ns", delta);
     } else if(delta >= 1000. && delta < 1000000.) {
-      print("{} us", delta/1000.);
+      print("% us", delta/1000.);
     } else {
-      print("{} ms", delta/1000000.);
+      print("% ms", delta/1000000.);
     }
   }
 };

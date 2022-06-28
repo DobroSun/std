@@ -17,7 +17,7 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define abs(a)    (((a) > 0)  ? (a) : -(a))
 #define square(a) ((a)*(a))
-
+#define clamp(mi, x, ma) (min(max(mi, x), ma))
 
 
 struct Source_Location {
@@ -28,9 +28,9 @@ struct Source_Location {
 
 // @Incomplete: right now Allocator is 32 bytes, but we can be smarter than this, we know that allocate, deallocate, reallocate function pointers will be constant and assigned only once. So we can switch these 3 variables to one constant pointer. 32 bytes -> 16 bytes.
 struct Allocator {
-  void* (*allocate)(void* data, size_t bytes, Source_Location location);
-  void  (*deallocate)(void* data, void* ptr, Source_Location location);
-  void* (*reallocate)(void* data, void* ptr, size_t bytes, Source_Location location);
+  void* (*allocate_)(void* data, size_t bytes, Source_Location location);
+  void  (*deallocate_)(void* data, void* ptr, Source_Location location);
+  void* (*reallocate_)(void* data, void* ptr, size_t bytes, Source_Location location);
   void* allocator_data;
 };
 inline Allocator get_global_allocator();
@@ -135,3 +135,9 @@ template<class T>          void array_free(array<T>*);
 
 #include "math.h"
 #include "platform.h"
+
+#include "filesystem_api.cpp"
+#include "filesystem_windows.cpp"
+
+#include "threads_api.cpp"
+#include "threads_windows.cpp"
