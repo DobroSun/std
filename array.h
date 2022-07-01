@@ -93,8 +93,6 @@ void array_add_(array<T>* a, T* v, size_t s, Source_Location loc) {
   }
 }
 
-#define array_add(...) array_add_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
-
 template<class T>
 void array_add_(array<T>* a, const array<T>* b, Source_Location loc) {
   if (a->size + b->size > a->capacity) {

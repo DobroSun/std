@@ -9,7 +9,7 @@ Allocator logging_allocator(struct Allocation_Storage*);
 Allocator logging_allocator();
 Allocator memory_arena_allocator(struct Memory_Arena*);
 Allocator temporary_storage_allocator(struct Temporary_Storage*);
-void      report_all_memory_leaks(struct array<struct Allocation_Chunk>*);
+void      report_all_memory_leaks(array<struct Allocation_Chunk>);
 
 
 struct Memory_Arena {
@@ -21,7 +21,7 @@ struct Memory_Arena {
 
 struct Temporary_Storage {
 	Memory_Arena arena;
-	size_t highest_water_value;
+	size_t highest_water_mark;
 };
 
 struct Allocation_Chunk {
@@ -38,7 +38,7 @@ struct Allocation_Storage {
   }
 
   ~Allocation_Storage() {
-    report_all_memory_leaks(&error_reports);
+    report_all_memory_leaks(error_reports);
     array_free(&error_reports);
   }
 };
@@ -154,9 +154,9 @@ void print_formatted_number(size_t n) {
   }
 }
 
-void report_all_memory_leaks(array<Allocation_Chunk>* error_reports) {
+void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
   size_t total = 0;
-  for(const Allocation_Chunk& it : *error_reports) {
+  for(Allocation_Chunk it : error_reports) {
     if(it.allocated) {
       // 
       // @Incomplete: line up all strings on ':' symbols.
@@ -211,7 +211,7 @@ void* temporary_allocate(void* data, size_t bytes, Source_Location loc) {
 	Temporary_Storage* storage = (Temporary_Storage*) data;
 
   void* r = arena_allocate(&storage->arena, bytes, loc);
-  storage->highest_water_value = max(storage->arena.top, storage->highest_water_value);
+  storage->highest_water_mark = max(storage->arena.top, storage->highest_water_mark);
 	return r;
 }
 
@@ -225,7 +225,7 @@ void* temporary_reallocate(void* data, void* ptr, size_t bytes, Source_Location 
 void begin_temporary_storage(Temporary_Storage* storage, size_t bytes = 5e6) {
   begin_memory_arena(&storage->arena);
   storage->arena.allocator = temporary_storage_allocator(storage);
-  storage->highest_water_value = 0;
+  storage->highest_water_mark = 0;
 }
 
 void reset_temporary_storage(Temporary_Storage* storage) {
