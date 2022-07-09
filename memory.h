@@ -32,23 +32,27 @@ struct Allocation_Chunk {
 
 struct Allocation_Storage {
   array<Allocation_Chunk> error_reports; // @CleanUp: SOA > AOS;
+  bool should_report_memory_leaks = true;
 
   Allocation_Storage() {
     error_reports.allocator = default_allocator();
   }
 
   ~Allocation_Storage() {
-    report_all_memory_leaks(error_reports);
+    if (should_report_memory_leaks) {
+      report_all_memory_leaks(error_reports);
+    }
     array_free(&error_reports);
   }
 };
 
 
+static Allocation_Storage allocation_storage;
+
 #ifdef NDEBUG
 static const Allocator global_internal_allocator = default_allocator();
 static       Allocator global_allocator          = default_allocator();
 #else
-static       Allocation_Storage allocation_storage;                                        // @ThreadSafety:
 static const Allocator global_internal_allocator = logging_allocator(&allocation_storage); // @ThreadSafety: 
 static       Allocator global_allocator          = logging_allocator(&allocation_storage); // @ThreadSafety: 
 #endif

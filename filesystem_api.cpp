@@ -20,9 +20,10 @@ literal read_entire_file(literal filename) {
     LARGE_INTEGER file_size;
     if(GetFileSizeEx(handle, &file_size)) {
       size_t size = file_size.QuadPart;
-      if(void*  data = alloc(temp_allocator(), size)) {
+      if(void* data = alloc(size+1)) {
         DWORD bytes_read;
         if(ReadFile(handle, data, size, &bytes_read, 0) && size == bytes_read) {
+          ((char*)data)[size] = '\0';
           result.data  = (const char*) data;
           result.count = size;
         } else {

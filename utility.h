@@ -12,7 +12,7 @@ void swap(void* a, void* b, size_t size_of) {
   memcpy(b, t, size_of);
 }
 
-#define Allocate_Struct(type) ((type*) alloc(sizeof(type))) 
+#define Allocate_Struct(...) ((__VA_ARGS__*) alloc(sizeof(__VA_ARGS__))) 
 
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
@@ -86,6 +86,19 @@ inline std::ostream& operator<<(std::ostream &os, literal l) {
     os << l.data[i];
   }
   return os;
+}
+
+literal strip_begin(literal string) {
+  while (string.count) {
+    char c = string.data[0];
+    if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r') {
+      string.data  += 1;
+      string.count -= 1;
+    } else {
+      break;
+    }
+  }
+  return string;
 }
 
 #define static_string_from_literal(name, l) \
@@ -383,5 +396,4 @@ define_functor2(plus, +);
 define_functor2(minus, -);
 define_functor2(logic_not, !);
 define_functor2(bit_not, ~);
-
 
