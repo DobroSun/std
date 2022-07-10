@@ -126,7 +126,10 @@ template<class T>          T* array_pop(array<T>*);
 template<class T>          void array_free(array<T>*);
 
 // @Ugh: What about release build? 
-#define array_add(...) array_add_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
+#define array_add(...)     array_add_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
+#define array_reserve(...) array_reserve_(__VA_ARGS__, { __LINE__, __FILE__, __func__ })
+
+// @Incomplete: do the same thing for all allocating functions: array_reserve, array_resize, etc.
 
 #include "memory.h"
 #include "array.h"

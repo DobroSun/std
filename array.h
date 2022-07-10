@@ -56,7 +56,7 @@ uint64 array_index(static_array<T, N>* a, T v) {
 
 // start of array
 template<class T>
-void array_reserve(array<T>* a, s64 new_capacity, Source_Location loc) {
+void array_reserve_(array<T>* a, s64 new_capacity, Source_Location loc) {
   //assert(new_capacity > a->capacity && "array<T>;:reserve new_capacity is <= then array one, can't do anything!");
 
   a->data = (T*) __realloc(a->allocator, a->data, sizeof(T)*new_capacity, loc);
@@ -66,7 +66,7 @@ void array_reserve(array<T>* a, s64 new_capacity, Source_Location loc) {
 template<class T>
 T* array_add_(array<T>* a, Source_Location loc) {
   if(a->size == a->capacity) {
-    array_reserve(a, GROW_FUNCTION(a->capacity), loc);
+    array_reserve_(a, GROW_FUNCTION(a->capacity), loc);
   }
   return &a->data[a->size++];
 }
@@ -97,7 +97,7 @@ template<class T>
 void array_add_(array<T>* a, const array<T>* b, Source_Location loc) {
   if (a->size + b->size > a->capacity) {
     size_t new_capacity = a->size + b->size;
-    array_reserve(a, new_capacity, loc);
+    array_reserve_(a, new_capacity, loc);
   }
   memmove(a->data + a->size, b->data, sizeof(T) * b->size); // @Incomplete: memcpy
   a->size += b->size;
@@ -171,7 +171,7 @@ T* array_last(array<T>* a) {
 
 template<class T>
 void array_resize(array<T>* a, size_t new_size) {
-  array_reserve(a, new_size);
+  array_reserve_(a, new_size);
   a->size = a->capacity;
 }
 

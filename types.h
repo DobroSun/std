@@ -28,12 +28,19 @@ typedef int8   s8;
 typedef int16  s16;
 typedef int32  s32;
 typedef int64  s64;
+typedef int8   i8;
+typedef int16  i16;
+typedef int32  i32;
+typedef int64  i64;
 typedef uint8  u8;
 typedef uint16 u16;
 typedef uint32 u32;
 typedef uint64 u64;
 typedef float  f32;
 typedef double f64;
+
+typedef float  float32;
+typedef double float64;
 
 typedef uint32 uint;
 

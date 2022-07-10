@@ -62,6 +62,18 @@ struct literal {
 inline literal XXX_visual_studio_sucks(const char* x, size_t s) { return { x, s }; }
 #define make_literal(x) XXX_visual_studio_sucks((x), sizeof(x)-1)
 
+int len(const char* s) {
+  if (s) {
+    const char* e = s;
+    while (*e != '\0') {
+      e++;
+    }
+    return e - s;
+  } else {
+    return 0;
+  }
+}
+
 
 inline bool operator==(char s, literal l) { return l.count == 1 && l.data[0] == s; }
 inline bool operator==(literal l, char s) { return l.count == 1 && l.data[0] == s; }
@@ -88,7 +100,7 @@ inline std::ostream& operator<<(std::ostream &os, literal l) {
   return os;
 }
 
-literal strip_begin(literal string) {
+literal strip_front(literal string) {
   while (string.count) {
     char c = string.data[0];
     if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r') {
@@ -99,6 +111,13 @@ literal strip_begin(literal string) {
     }
   }
   return string;
+}
+
+const char* make_c_string(literal l) { 
+  char* v = (char*) alloc(temp_allocator(), l.count+1);
+  memset(v, '\0', l.count+1);
+  memcpy(v, l.data, l.count);
+  return v;
 }
 
 #define static_string_from_literal(name, l) \
@@ -126,7 +145,7 @@ inline size_t write_string(char *r, size_t cursor, literal l) {
 }
 
 inline size_t write_string(char *r, size_t cursor, const char *s) {
-  return write_string(r, cursor, s, strlen(s));
+  return write_string(r, cursor, s, len(s));
 }
 
 inline size_t count_format(const char *fmt, va_list args) {
@@ -224,7 +243,7 @@ void print_unit(const char* unit) {
 
 template<class T, class ...Args>
 void print(const char *s, T first, Args... rest) {
-  literal l = { s, strlen(s) }; // @Incomplete: @AsciiOnly: 
+  literal l = { s, len(s) }; // @Incomplete: @AsciiOnly: 
   Format_String_Info info = check_format_string(l);
 
   defer { array_free(&info.format_positions); }; // @Incomplete: @UseTemporaryStorage: 
@@ -242,8 +261,451 @@ void print(const char *s, T first, Args... rest) {
   }
   return;
 }
-#else 
-template<class T> class array;
+
+#endif
+
+void reverse(literal* string) {
+    int start = 0;
+    int end   = string->count-1;
+    while (start < end) {
+        char ss = string->data[start];
+        char ee = string->data[end];
+        ((char*) string->data)[start] = ee;
+        ((char*) string->data)[end]   = ss;
+        start++;
+        end--;
+    }
+}
+
+int integer_to_string(int64 number, int base, char* string) {
+  int count = 0;
+  bool is_negative = false; // @Note: I'm always negative.
+
+  if (number == 0) {
+    string[count++] = '0';
+    string[count++] = '\0';
+    return 1;
+  }
+
+  if (number < 0 && base == 10) {
+    is_negative = true;
+    number = -number;
+  }
+
+  while (number != 0) {
+    int rem = number % base;
+    string[count++] = (rem > 9)? (rem-10) + 'a' : rem + '0';
+    number = number / base;
+  }
+
+  if (is_negative) {
+    string[count++] = '-';
+  }
+
+  string[count] = '\0';
+
+  literal l = { string, count };
+  reverse(&l);
+  return count;
+}
+
+int uinteger_to_string(uint64 number, int base, char* string) {
+  int count = 0;
+  bool is_negative = false; // @Note: I'm always negative.
+
+  if (number == 0) {
+    string[count++] = '0';
+    string[count++] = '\0';
+    return 1;
+  }
+
+  while (number != 0) {
+    int rem = number % base;
+    string[count++] = (rem > 9)? (rem-10) + 'a' : rem + '0';
+    number = number / base;
+  }
+
+  if (is_negative) {
+    string[count++] = '-';
+  }
+
+  string[count] = '\0';
+
+  literal l = { string, count };
+  reverse(&l);
+  return count;
+}
+
+int float_to_string(double fp, int number_of_digits_after_decimal_point, char* string) {
+  char conversion[1076], intPart_reversed[311];
+  int char_count = 0;
+
+  double fp_int;
+  double fp_frac = modf(fp, &fp_int); // Separate integer/fractional parts
+
+  while (fp_int > 0) {
+    // Convert integer part, if any
+    intPart_reversed[char_count++] = '0' + (int)fmod(fp_int, 10);
+    fp_int = floor(fp_int / 10);
+  }
+
+  for (int i = 0; i < char_count; i++) {
+    // Reverse the integer part, if any
+    conversion[i] = intPart_reversed[char_count-i-1];
+  }
+
+  conversion[char_count++] = '.';
+  int decimal_index = char_count;
+
+  while (fp_frac > 0) {
+    // Convert fractional part, if any
+    fp_frac *=10;
+    fp_frac  = modf(fp_frac, &fp_int);
+    conversion[char_count++] = '0' + (int)fp_int;
+  }
+
+  conversion[char_count] = '\0'; // null terminator
+  memcpy(string, conversion, decimal_index + number_of_digits_after_decimal_point);
+  return decimal_index + number_of_digits_after_decimal_point;
+}
+
+void ftoa(float f, const char* string) {
+  ftoa((double) f, string);
+}
+
+
+typedef array<char> String_Builder;
+
+static int32 indentation_level = 0;
+
+void ensure_space(String_Builder* builder, int space) {
+  array_reserve(builder, builder->size + space);
+}
+
+void put(String_Builder* builder, literal s) {
+  array_add(builder, (char*) s.data, s.count);
+}
+
+void put(String_Builder* builder, const char* s) {
+  put(builder, {s, strlen(s)}); // @Speed: no need to do strlen(...) we always use raw string literals, so we can make a template here that will know about its size.
+}
+
+void put(String_Builder* builder, int64 a, int base) {
+  ensure_space(builder, 32); // @Note: won't support larger numbers.
+
+  int count = integer_to_string(a, base, builder->data + builder->size);
+
+  assert(count < 32);
+  builder->size += count;
+}
+
+void put(String_Builder* builder, uint64 a, int base) {
+  ensure_space(builder, 32); // @Note: won't support larger numbers.
+
+  int count = uinteger_to_string(a, base, builder->data + builder->size);
+
+  assert(count < 32);
+  builder->size += count;
+}
+
+void put(String_Builder* builder, float64 a, int number_of_digits_after_decimal_point) {
+  ensure_space(builder, 32); // @Note: won't support larger numbers.
+
+  int count = float_to_string(a, number_of_digits_after_decimal_point, builder->data + builder->size);
+
+  assert(count < 32);
+  builder->size += count;
+}
+
+
+void put_spaces(String_Builder* builder) {
+  char* spaces = (char*) alloca(indentation_level);
+  memset(spaces, ' ', indentation_level);
+
+  literal l = { spaces, (size_t)indentation_level };
+  put(builder, l);
+}
+
+
+enum Print_Type {
+  PRINT_NONE = 0,
+  PRINT_INT_8,
+  PRINT_INT_16,
+  PRINT_INT_32,
+  PRINT_INT_64,
+  PRINT_UINT_8,
+  PRINT_UINT_16,
+  PRINT_UINT_32,
+  PRINT_UINT_64,
+  PRINT_FLOAT_32,
+  PRINT_FLOAT_64,
+  PRINT_C_STRING,
+  PRINT_LITERAL,
+  PRINT_FORMATTED_INT,
+  PRINT_FORMATTED_FLOAT,
+};
+
+// @Incomplete: what about different types?
+template<class T>
+struct Print_Formatted_Integer {
+  T value;
+  int base = 10;
+};
+
+template<class T>
+struct Print_Formatted_Float {
+  T value;
+  int number_of_digits_after_decimal_point = 5;
+};
+
+typedef Print_Formatted_Integer<int8>   Print_Formatted_Int8;
+typedef Print_Formatted_Integer<int16>  Print_Formatted_Int16;
+typedef Print_Formatted_Integer<int32>  Print_Formatted_Int32;
+typedef Print_Formatted_Integer<int64>  Print_Formatted_Int64;
+typedef Print_Formatted_Integer<uint8>  Print_Formatted_Uint8;
+typedef Print_Formatted_Integer<uint16> Print_Formatted_Uint16;
+typedef Print_Formatted_Integer<uint32> Print_Formatted_Uint32;
+typedef Print_Formatted_Integer<uint64> Print_Formatted_Uint64;
+typedef Print_Formatted_Float<float32>  Print_Formatted_Float32;
+typedef Print_Formatted_Float<float64>  Print_Formatted_Float64;
+
+
+
+struct Print_Variable {
+  Print_Type type;
+  union {
+    Print_Formatted_Int8 i8;
+    Print_Formatted_Int16 i16;
+    Print_Formatted_Int32 i32;
+    Print_Formatted_Int64 i64;
+    Print_Formatted_Uint8 u8;
+    Print_Formatted_Uint16 u16;
+    Print_Formatted_Uint32 u32;
+    Print_Formatted_Uint64 u64;
+
+    Print_Formatted_Float32 f32;
+    Print_Formatted_Float64 f64;
+
+    const char* c_string;
+    literal     string;
+  };
+
+  Print_Variable(int8 v) {
+    type = PRINT_INT_8;
+    i8 = {};
+    i8.value = v;
+  }
+
+  Print_Variable(int16 v) {
+    type = PRINT_INT_16;
+    i16 = {};
+    i16.value = v;
+  }
+
+  Print_Variable(int32 v) {
+    type = PRINT_INT_32;
+    i32 = {};
+    i32.value = v;
+  }
+
+  Print_Variable(int64 v) {
+    type = PRINT_INT_64;
+    i64 = {};
+    i64.value = v;
+  }
+
+  Print_Variable(uint8 v) {
+    type = PRINT_UINT_8;
+    u8 = {};
+    u8.value = v;
+  }
+
+  Print_Variable(uint16 v) {
+    type = PRINT_UINT_16;
+    u16 = {};
+    u16.value = v;
+  }
+
+  Print_Variable(uint32 v) {
+    type = PRINT_UINT_32;
+    u32 = {};
+    u32.value = v;
+  }
+
+  Print_Variable(uint64 v) {
+    type = PRINT_UINT_64;
+    u64 = {};
+    u64.value = v;
+  }
+
+  Print_Variable(float32 v) {
+    type = PRINT_FLOAT_32;
+    f32 = {};
+    f32.value = v;
+  }
+
+  Print_Variable(float64 v) {
+    type = PRINT_FLOAT_64;
+    f64 = {};
+    f64.value = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<int8> v) {
+    type = PRINT_INT_8;
+    i8 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<int16> v) {
+    type = PRINT_INT_16;
+    i16 = v;
+  }
+
+
+  Print_Variable(Print_Formatted_Integer<int32> v) {
+    type = PRINT_INT_32;
+    i32 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<int64> v) {
+    type = PRINT_INT_64;
+    i64 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<uint8> v) {
+    type = PRINT_UINT_8;
+    u8 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<uint16> v) {
+    type = PRINT_UINT_16;
+    u16 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<uint32> v) {
+    type = PRINT_UINT_32;
+    u32 = v;
+  }
+
+  Print_Variable(Print_Formatted_Integer<uint64> v) {
+    type = PRINT_UINT_64;
+    u64 = v;
+  }
+
+  Print_Variable(Print_Formatted_Float<float32> v) {
+    type = PRINT_FLOAT_32;
+    f32 = v;
+  }
+
+  Print_Variable(Print_Formatted_Float<float64> v) {
+    type = PRINT_FLOAT_64;
+    f64 = v;
+  }
+
+  Print_Variable(const char* v) {
+    type = PRINT_C_STRING;
+    c_string = v;
+  }
+
+  Print_Variable(char* v) {
+    type = PRINT_C_STRING;
+    c_string = v;
+  }
+
+  Print_Variable(literal v) {
+    type = PRINT_LITERAL;
+    string = v;
+  }
+};
+
+template<class T>
+Print_Formatted_Integer<T> formatted_int(T value, int base = 10) {
+  return { value, base };
+}
+
+template<class T>
+Print_Formatted_Float<T> formatted_float(T value, int number_of_digits_after_decimal_point = 5) {
+  return { value, number_of_digits_after_decimal_point };
+}
+
+void print(const char* format) {
+  printf("%.*s", len(format), format);
+}
+
+template<class... Args>
+void print(const char* format, Args... args) {
+  Print_Variable variables[] = { Print_Variable(args)... };
+
+  int num_arguments_passed = static_array_size(variables);
+  int num_arguments_expected_from_format = 0;
+
+  // 
+  // @Incomplete: use Temporary_Storage here, for now just manually deallocate String_Builder.
+  // 
+  String_Builder builder;
+  defer { array_free(&builder); };
+
+  int argument       = 0;
+  const char* cursor = format;
+  if (cursor) {
+    while (1) {
+
+      literal format_percent = make_literal("%");
+      literal double_percent = make_literal("%%");
+
+      if (*cursor == '\0') { break; }
+
+      if (cursor == double_percent) {
+        cursor += double_percent.count;
+        put(&builder, (char*) "%");
+
+      } else if (cursor == format_percent) {
+        num_arguments_expected_from_format += 1;
+        cursor += format_percent.count;
+
+        if(argument >= num_arguments_passed) { break; }
+
+        Print_Variable v = variables[argument];
+        argument += 1;
+
+        switch (v.type) {
+        case PRINT_INT_8:  put(&builder, (int64) v.i8.value, v.i8.base); break; 
+        case PRINT_INT_16: put(&builder, (int64) v.i16.value, v.i16.base); break;
+        case PRINT_INT_32: put(&builder, (int64) v.i32.value, v.i32.base); break;
+        case PRINT_INT_64: put(&builder, (int64) v.i64.value, v.i64.base); break;
+
+        case PRINT_UINT_8:  put(&builder, (uint64) v.u8.value, v.u8.base); break;
+        case PRINT_UINT_16: put(&builder, (uint64) v.u16.value, v.u16.base); break;
+        case PRINT_UINT_32: put(&builder, (uint64) v.u32.value, v.u32.base); break;
+        case PRINT_UINT_64: put(&builder, (uint64) v.u64.value, v.u64.base); break;
+
+        case PRINT_FLOAT_32: put(&builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
+        case PRINT_FLOAT_64: put(&builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
+
+        case PRINT_C_STRING: put(&builder, v.c_string); break;
+        case PRINT_LITERAL:  put(&builder, v.string);   break;
+        }
+
+      } else {
+        put(&builder, { cursor, 1 });
+        cursor += 1;
+      }
+    }
+
+    if (num_arguments_passed < num_arguments_expected_from_format) {
+      assert(0 && "number of arguments passed in print is less than number of arguments expected from format");
+    } else if (num_arguments_passed > num_arguments_expected_from_format) {
+      assert(0 && "number of arguments passed in print is greater than number of arguments expected from format");
+    } else {
+      printf("%.*s", (int) builder.size, builder.data);
+    }
+  }
+}
+
+void print(Print_Variable v) {
+  print("%\n", v);
+}
+
+#if 0
 
 template<class T>
 void print_obj(T obj) {
