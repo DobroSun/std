@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "types.h"
+#include "windows.h"
 
 #include <iostream>
 #include <chrono>

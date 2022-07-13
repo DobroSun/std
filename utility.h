@@ -201,69 +201,6 @@ inline size_t write_format(char *r, size_t cursor, const char *fmt, ...) {
   return size;
 }
 
-
-// 
-// function: print(format, args...)
-// print("hello {}{}", "world", '!') -> "hello world!"
-// print("only format{}!")           -> "only format!"
-// print("{} + {} = {}", 1, 2, 3)    -> "1 + 2 = 3"
-// 
-
-#if 0
-struct Format_String_Info {
-  array<uint> format_positions;
-  uint        num_format_args;
-};
-
-Format_String_Info check_format_string(literal s) {
-  Format_String_Info info = {};
-
-  const char* cursor = s.data;
-  uint count = 0;
-
-  while (*cursor != '\0') {
-    if (*cursor == '%') { 
-      info.num_format_args += 1;
-      array_add(&info.format_positions, count);
-    }
-    cursor += 1;
-    count  += 1;
-  }
-
-  return info;
-}
-
-template<class T>
-void print_unit(T unit);
-
-template<>
-void print_unit(const char* unit) {
-  printf(unit);
-}
-
-template<class T, class ...Args>
-void print(const char *s, T first, Args... rest) {
-  literal l = { s, len(s) }; // @Incomplete: @AsciiOnly: 
-  Format_String_Info info = check_format_string(l);
-
-  defer { array_free(&info.format_positions); }; // @Incomplete: @UseTemporaryStorage: 
-
-  uint previous_pos = 0;
-  for (size_t i = 0; i < info.num_format_args; i++) {
-    uint format_pos = info.format_positions[i];
-    literal p = { &s[previous_pos], format_pos-previous_pos };
-    if (p.count > 0) {
-      printf("%.*s", p.count, p.data);
-    }
-
-    print_unit(first);
-    previous_pos = format_pos+1;
-  }
-  return;
-}
-
-#endif
-
 void reverse(literal* string) {
     int start = 0;
     int end   = string->count-1;
@@ -387,7 +324,7 @@ void put(String_Builder* builder, literal s) {
 }
 
 void put(String_Builder* builder, const char* s) {
-  put(builder, {s, strlen(s)}); // @Speed: no need to do strlen(...) we always use raw string literals, so we can make a template here that will know about its size.
+  put(builder, {s, (size_t) len(s)}); // @Speed: no need to do len(...), we always use raw string literals, so we can make a template here that will know about its size.
 }
 
 void put(String_Builder* builder, int64 a, int base) {
@@ -627,166 +564,113 @@ Print_Formatted_Float<T> formatted_float(T value, int number_of_digits_after_dec
   return { value, number_of_digits_after_decimal_point };
 }
 
-void print(const char* format) {
-  printf("%.*s", len(format), format);
-}
-
 template<class... Args>
-void print(const char* format, Args... args) {
+literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
+  if (!format) return {};
+
   Print_Variable variables[] = { Print_Variable(args)... };
 
   int num_arguments_passed = static_array_size(variables);
   int num_arguments_expected_from_format = 0;
 
   // 
-  // @Incomplete: use Temporary_Storage here, for now just manually deallocate String_Builder.
+  // @Incomplete: no need to use String_Builder here, just use plain array<char>.
   // 
   String_Builder builder;
-  defer { array_free(&builder); };
+  builder.allocator = temp_allocator();
 
   int argument       = 0;
   const char* cursor = format;
-  if (cursor) {
-    while (1) {
+  while (1) {
+    literal format_percent = make_literal("%");
+    literal double_percent = make_literal("%%");
 
-      literal format_percent = make_literal("%");
-      literal double_percent = make_literal("%%");
+    if (*cursor == '\0') { break; }
 
-      if (*cursor == '\0') { break; }
+    if (cursor == double_percent) {
+      cursor += double_percent.count;
+      put(&builder, (char*) "%");
 
-      if (cursor == double_percent) {
-        cursor += double_percent.count;
-        put(&builder, (char*) "%");
+    } else if (cursor == format_percent) {
+      num_arguments_expected_from_format += 1;
+      cursor += format_percent.count;
 
-      } else if (cursor == format_percent) {
-        num_arguments_expected_from_format += 1;
-        cursor += format_percent.count;
+      if(argument >= num_arguments_passed) { break; }
 
-        if(argument >= num_arguments_passed) { break; }
+      Print_Variable v = variables[argument];
+      argument += 1;
 
-        Print_Variable v = variables[argument];
-        argument += 1;
+      switch (v.type) {
+      case PRINT_INT_8:  put(&builder, (int64) v.i8.value, v.i8.base); break; 
+      case PRINT_INT_16: put(&builder, (int64) v.i16.value, v.i16.base); break;
+      case PRINT_INT_32: put(&builder, (int64) v.i32.value, v.i32.base); break;
+      case PRINT_INT_64: put(&builder, (int64) v.i64.value, v.i64.base); break;
 
-        switch (v.type) {
-        case PRINT_INT_8:  put(&builder, (int64) v.i8.value, v.i8.base); break; 
-        case PRINT_INT_16: put(&builder, (int64) v.i16.value, v.i16.base); break;
-        case PRINT_INT_32: put(&builder, (int64) v.i32.value, v.i32.base); break;
-        case PRINT_INT_64: put(&builder, (int64) v.i64.value, v.i64.base); break;
+      case PRINT_UINT_8:  put(&builder, (uint64) v.u8.value, v.u8.base); break;
+      case PRINT_UINT_16: put(&builder, (uint64) v.u16.value, v.u16.base); break;
+      case PRINT_UINT_32: put(&builder, (uint64) v.u32.value, v.u32.base); break;
+      case PRINT_UINT_64: put(&builder, (uint64) v.u64.value, v.u64.base); break;
 
-        case PRINT_UINT_8:  put(&builder, (uint64) v.u8.value, v.u8.base); break;
-        case PRINT_UINT_16: put(&builder, (uint64) v.u16.value, v.u16.base); break;
-        case PRINT_UINT_32: put(&builder, (uint64) v.u32.value, v.u32.base); break;
-        case PRINT_UINT_64: put(&builder, (uint64) v.u64.value, v.u64.base); break;
+      case PRINT_FLOAT_32: put(&builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
+      case PRINT_FLOAT_64: put(&builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
 
-        case PRINT_FLOAT_32: put(&builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
-        case PRINT_FLOAT_64: put(&builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
-
-        case PRINT_C_STRING: put(&builder, v.c_string); break;
-        case PRINT_LITERAL:  put(&builder, v.string);   break;
-        }
-
-      } else {
-        put(&builder, { cursor, 1 });
-        cursor += 1;
+      case PRINT_C_STRING: put(&builder, v.c_string); break;
+      case PRINT_LITERAL:  put(&builder, v.string);   break;
       }
-    }
 
-    if (num_arguments_passed < num_arguments_expected_from_format) {
-      assert(0 && "number of arguments passed in print is less than number of arguments expected from format");
-    } else if (num_arguments_passed > num_arguments_expected_from_format) {
-      assert(0 && "number of arguments passed in print is greater than number of arguments expected from format");
     } else {
-      printf("%.*s", (int) builder.size, builder.data);
+      put(&builder, { cursor, 1 });
+      cursor += 1;
     }
   }
+
+  if (num_arguments_passed < num_arguments_expected_from_format) {
+    assert(0 && "number of arguments passed in print is less than number of arguments expected from format");
+  } else if (num_arguments_passed > num_arguments_expected_from_format) {
+    assert(0 && "number of arguments passed in print is greater than number of arguments expected from format");
+  } else {
+    if (compare(allocator, temp_allocator())) {
+      return { builder.data, builder.size };
+    } else {
+      literal l;
+      l.data  = (const char*) alloc(allocator, builder.size);;
+      l.count = builder.size;
+      memcpy((void*) l.data, builder.data, builder.size);
+      return l;
+    }
+  }
+  return {};
+}
+
+template<class... Args>
+literal sprint(const char* format, Args... args) {
+  return print_to_buffer(get_global_allocator(), format, args...);
+}
+
+template<class... Args>
+literal tprint(const char* format, Args... args) {
+  return print_to_buffer(temp_allocator(), format, args...);
+}
+
+template<class... Args>
+void print(const char* format, Args... args) {
+  // 
+  // @Incomplete: use Temporary_Storage::get_water_mark() and ::set_water_mark(); because print is going to be used a LOT!
+  // 
+  literal result = tprint(format, args...);
+
+  DWORD written;
+  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), result.data, result.count, &written, NULL);
+}
+
+void print(const char* format) {
+  DWORD written;
+  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), format, len(format), &written, NULL);
 }
 
 void print(Print_Variable v) {
   print("%\n", v);
 }
-
-#if 0
-
-template<class T>
-void print_obj(T obj) {
-  std::cout << obj; // @Incomplete: do the thing for every thing.
-}
-
-template<>
-void inline print_obj<void*>(void* obj) {
-  printf("%p", obj);
-}
-
-template<>
-void inline print_obj<bool>(bool obj) {
-  printf("%s", (obj) ? "true" : "false");
-}
-
-template<>
-void inline print_obj<literal>(literal obj) {
-  printf("%.*s", (int) obj.count, obj.data);
-}
-
-template<class T>
-void print_obj(array<T> a) {
-  printf("[");
-  for(s64 index = 0; index < a->size; index++) {
-    print_obj(a[index]);
-    printf("%s", ((index != a.count-1) ? ", " : ""));
-  }
-  printf("]");
-}
-
-size_t inline print_count(const char *s) {
-  size_t count = 0;
-  while(s[count]) {
-    if(s[count] == '%') {
-      break;
-    }
-    count++;
-  }
-  printf("%.*s", (int)count, s);
-  return count;
-}
-
-void inline print(const char *s) {
-  size_t count = print_count(s);
-  if(s[count]) {
-    s += count+1;
-    print(s);
-  }
-}
-
-template<class T, class ...Args>
-void print(const char *s, T first, Args... rest) {
-  size_t count = print_count(s);
-
-  if(s[count]) {
-    print_obj(first);
-    s += count+1;
-    print(s, rest...);
-  }
-}
-
-// print w/o format string.
-
-inline void print() {
-  printf("\n");
-}
-
-template<class T>
-void print(T last) {
-  print_obj(last);
-  print();
-}
-
-template<class T, class ...Args>
-void print(T first, Args... rest) {
-  print_obj(first);
-  printf(", ");
-  print(rest...);
-}
-#endif
 
 struct Timer {
   std::chrono::steady_clock::time_point start;

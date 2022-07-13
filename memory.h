@@ -1,6 +1,18 @@
 #pragma once
 
 
+// 
+//
+// @Incomplete: memory allocators should not just return operate with void* but with a pair of { void*, size_t }, rewrite everything to handle that.
+// 
+// 
+// 
+// struct Memory_Bulk {
+//  void*  memory;
+//  size_t allocated;
+// };
+
+
 Allocator default_allocator();
 Allocator logging_allocator(struct Allocation_Storage*);
 Allocator memory_arena_allocator(struct Memory_Arena*);
@@ -184,7 +196,7 @@ void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
 void* arena_allocate(void* data, size_t bytes, Source_Location loc) {
 	Memory_Arena* arena = (Memory_Arena*) data;
 	assert(arena->top + bytes <= arena->allocated);
-	void* r = (char*)arena->memory + arena->top;
+	void* r = (char*) arena->memory + arena->top;
 	arena->top += bytes;
 	return r;
 }
@@ -193,7 +205,15 @@ void arena_deallocate(void* data, void* ptr, Source_Location loc) {
 }
 
 void* arena_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
+	Memory_Arena* arena = (Memory_Arena*) data;
+  if (ptr) {
+    size_t how_much_was_allocated_before = ((char*) arena->memory + arena->top) - ptr;
+    arena->top += bytes - how_much_was_allocated_before;
+    assert(bytes > how_much_was_allocated_before);
+    return ptr;
+  } else {
     return arena_allocate(data, bytes, loc);
+  }
 }
 
 void begin_memory_arena(Memory_Arena* arena, size_t bytes = 5e6) {
@@ -223,7 +243,11 @@ void temporary_deallocate(void* data, void* ptr, Source_Location loc) {
 }
 
 void* temporary_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
-    return temporary_allocate(data, bytes, loc);
+	Temporary_Storage* storage = (Temporary_Storage*) data;
+
+  void* r = arena_reallocate(data, ptr, bytes, loc);
+  storage->highest_water_mark = max(storage->arena.top, storage->highest_water_mark);
+  return r;
 }
 
 void begin_temporary_storage(Temporary_Storage* storage, size_t bytes = 5e6) {
@@ -245,6 +269,14 @@ Allocator default_allocator()                      { return { default_allocate, 
 Allocator logging_allocator(Allocation_Storage* s) { return { log_allocate, log_deallocate, log_reallocate, s }; }
 Allocator memory_arena_allocator(Memory_Arena* a)  { return { arena_allocate, arena_deallocate, arena_reallocate, a }; }
 Allocator temporary_storage_allocator(Temporary_Storage* s) { return { temporary_allocate, temporary_deallocate, temporary_reallocate, s }; }
-Allocator temp_allocator()                         { return temporary_storage_allocator(&temporary_storage); }
+Allocator temp_allocator()                         { return temporary_storage.arena.allocator; }
 
 inline Allocator get_global_allocator() { return global_allocator; }
+
+
+bool compare(Allocator a, Allocator b) {
+  return a.allocate_   == b.allocate_   && 
+         a.deallocate_ == b.deallocate_ && 
+         a.reallocate_ == b.reallocate_ && 
+         a.allocator_data == b.allocator_data;
+}
