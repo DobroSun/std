@@ -103,6 +103,15 @@ void array_add_(array<T>* a, const array<T>* b, Source_Location loc) {
   a->size += b->size;
 }
 
+template<class T>
+void array_add_unique_(array<T>* a, T v, Source_Location loc) {
+  if (array_find(a, v)) {
+    return;
+  } else {
+    array_add_(a, v, loc);
+  }
+}
+
 template<class T, class F>
 T* array_find_by_predicate(array<T>* a, F predicate) {
   for(T& p : *a) {

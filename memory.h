@@ -151,48 +151,6 @@ void* log_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc) {
     return r;
 }
 
-void print_formatted_number(size_t n) {
-  static const size_t KB = 1024;
-  static const size_t MB = KB * 1024;
-  static const size_t GB = MB * 1024;
-  static const size_t TB = GB * 1024;
-
-  if(n > TB) {
-    printf("%.2f terabytes", n/(double)TB);
-  } else if(n > GB) {
-    printf("%.2f gigabytes", n/(double)GB);
-  } else if(n > MB) {
-    printf("%.2f megabytes", n/(double)MB);
-  } else if(n > KB) {
-    printf("%.2f kilobytes", n/(double)KB);
-  } else {
-    printf("%zu bytes", n);
-  }
-}
-
-void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
-  size_t total = 0;
-  for(Allocation_Chunk it : error_reports) {
-    if(it.allocated) {
-      // 
-      // @Incomplete: line up all strings on ':' symbols.
-      // 
-      printf("%s: %zu: %s <---- was allocated ", it.loc.file, it.loc.line, it.loc.function); // @Incomplete: forward declare print and use it in here.
-      print_formatted_number(it.allocated); // @Incomplete: handle this through print. Maybe create some format string to specify stuff in bytes.
-      printf(", but never freed!\n");
-      total += it.allocated;
-    }
-  }
-
-  if(total == 0) {
-    printf("No memory leaks!\n");
-  } else {
-    printf("%s", "Total memory leaked: ");
-    print_formatted_number(total);
-    puts("");
-  }
-}
-
 void* arena_allocate(void* data, size_t bytes, Source_Location loc) {
 	Memory_Arena* arena = (Memory_Arena*) data;
 	assert(arena->top + bytes <= arena->allocated);

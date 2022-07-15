@@ -3,6 +3,7 @@
 #define KB(x) 1024*(x)
 #define MB(x) 1024*KB(x)
 #define GB(x) 1024*MB(x)
+#define TB(x) 1024*GB(x)
 
 
 void swap(void* a, void* b, size_t size_of) {
@@ -376,10 +377,9 @@ enum Print_Type {
   PRINT_UINT_64,
   PRINT_FLOAT_32,
   PRINT_FLOAT_64,
+  PRINT_VOID_POINTER,
   PRINT_C_STRING,
   PRINT_LITERAL,
-  PRINT_FORMATTED_INT,
-  PRINT_FORMATTED_FLOAT,
 };
 
 // @Incomplete: what about different types?
@@ -422,6 +422,8 @@ struct Print_Variable {
 
     Print_Formatted_Float32 f32;
     Print_Formatted_Float64 f64;
+
+    void* pointer;
 
     const char* c_string;
     literal     string;
@@ -538,6 +540,11 @@ struct Print_Variable {
     f64 = v;
   }
 
+  Print_Variable(void* v) {
+    type = PRINT_VOID_POINTER;
+    pointer = v;
+  }
+
   Print_Variable(const char* v) {
     type = PRINT_C_STRING;
     c_string = v;
@@ -614,8 +621,9 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
       case PRINT_FLOAT_32: put(&builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
       case PRINT_FLOAT_64: put(&builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
 
-      case PRINT_C_STRING: put(&builder, v.c_string); break;
-      case PRINT_LITERAL:  put(&builder, v.string);   break;
+      case PRINT_VOID_POINTER: put(&builder, make_literal("0x")); put(&builder, (uint64) v.pointer, 16); break;
+      case PRINT_C_STRING:     put(&builder, v.c_string); break;
+      case PRINT_LITERAL:      put(&builder, v.string);   break;
       }
 
     } else {
@@ -625,9 +633,9 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
   }
 
   if (num_arguments_passed < num_arguments_expected_from_format) {
-    assert(0 && "number of arguments passed in print is less than number of arguments expected from format");
+    assert(0 && "number of arguments passed in print_to_buffer is less than number of arguments expected from format");
   } else if (num_arguments_passed > num_arguments_expected_from_format) {
-    assert(0 && "number of arguments passed in print is greater than number of arguments expected from format");
+    assert(0 && "number of arguments passed in print_to_buffer is greater than number of arguments expected from format");
   } else {
     if (compare(allocator, temp_allocator())) {
       return { builder.data, builder.size };
@@ -680,16 +688,44 @@ struct Timer {
   ~Timer() { 
     end = std::chrono::steady_clock::now(); 
   
-    const f64 delta = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    if(delta < 1000.) {
-      print("% ns", delta);
-    } else if(delta >= 1000. && delta < 1000000.) {
-      print("% us", delta/1000.);
-    } else {
-      print("% ms", delta/1000000.);
-    }
+    double delta = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    literal print_number_in_seconds(double);
+    print(print_number_in_seconds(delta));
   }
 };
+
+literal print_number_in_seconds(double n) {
+  if(n < 1000.) {
+    return tprint("% ns", n);
+  } else if(n >= 1000. && n < 1000000.) {
+    return tprint("% us", n/1000.);
+  } else {
+    return tprint("% ms", n/1000000.);
+  }
+}
+
+// 
+// @Incomplete: handle this through Print_Formatted_Integer, just have a tag? to specify that we want to print this in bytes, meters, ...
+// 
+literal print_number_in_bytes(size_t n) {
+  static const size_t KB = 1024;
+  static const size_t MB = KB * 1024;
+  static const size_t GB = MB * 1024;
+  static const size_t TB = GB * 1024;
+
+  if(n > TB) {
+    return tprint("% terabytes", formatted_float(n/(double)TB, 2));
+  } else if(n > GB) {
+    return tprint("% gigabytes", formatted_float(n/(double)GB, 2));
+  } else if(n > MB) {
+    return tprint("% megabytes", formatted_float(n/(double)MB, 2));
+  } else if(n > KB) {
+    return tprint("% kilobytes", formatted_float(n/(double)KB, 2));
+  } else {
+    return tprint("% bytes", n);
+  }
+}
+
 
 template<class T>
 s32 get_number_of_digits(T v) {
@@ -743,3 +779,22 @@ define_functor2(minus, -);
 define_functor2(logic_not, !);
 define_functor2(bit_not, ~);
 
+
+void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
+  size_t total = 0;
+  for(Allocation_Chunk it : error_reports) {
+    if(it.allocated) {
+      // 
+      // @Incomplete: line up all strings on ':' symbols.
+      // 
+      print("%: %: % <---- was allocated %, but never freed!\n", it.loc.file, it.loc.line, it.loc.function, print_number_in_bytes(it.allocated)); // @Incomplete: forward declare print and use it in here.
+      total += it.allocated;
+    }
+  }
+
+  if(total == 0) {
+    print("No memory leaks!\n");
+  } else {
+    print("Total memory leaked: %\n", print_number_in_bytes(total));
+  }
+}
