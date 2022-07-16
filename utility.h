@@ -23,20 +23,20 @@ void swap(void* a, void* b, size_t size_of) {
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#define red(A) ANSI_COLOR_RED A ANSI_COLOR_RESET
-#define green(A) ANSI_COLOR_GREEN A ANSI_COLOR_RESET
-#define yellow(A) ANSI_COLOR_YELLOW A ANSI_COLOR_RESET
-#define blue(A) ANSI_COLOR_BLUE A ANSI_COLOR_RESET
+#define red(A)     ANSI_COLOR_RED     A ANSI_COLOR_RESET
+#define green(A)   ANSI_COLOR_GREEN   A ANSI_COLOR_RESET
+#define yellow(A)  ANSI_COLOR_YELLOW  A ANSI_COLOR_RESET
+#define blue(A)    ANSI_COLOR_BLUE    A ANSI_COLOR_RESET
 #define magenta(A) ANSI_COLOR_MAGENTA A ANSI_COLOR_RESET
-#define cyan(A) ANSI_COLOR_CYAN A ANSI_COLOR_RESET
+#define cyan(A)    ANSI_COLOR_CYAN    A ANSI_COLOR_RESET
 
-#define CONCAT_LINES(...) __VA_ARGS__
+#define CONCATENATE_LINES(...) __VA_ARGS__
 
 
 #define defer auto ANONYMOUS_NAME = Junk{} + [&]()
-#define ANONYMOUS_NAME CONCAT(GAMMA, __LINE__)
-#define CONCAT(A, B) CONCAT_IMPL(A, B)
-#define CONCAT_IMPL(A, B) A##B
+#define ANONYMOUS_NAME CONCATENATE(GAMMA, __LINE__)
+#define CONCATENATE(A, B) CONCATENATE_IMPL(A, B)
+#define CONCATENATE_IMPL(A, B) A##B
 
 template<class T>
 struct Defer {
@@ -79,14 +79,14 @@ int len(const char* s) {
 inline bool operator==(char s, literal l) { return l.count == 1 && l.data[0] == s; }
 inline bool operator==(literal l, char s) { return l.count == 1 && l.data[0] == s; }
 
-inline bool operator==(const char *s, literal l) { return l.count && !strncmp(s, l.data, l.count); }
-inline bool operator==(literal l, const char *s) { return l.count && !strncmp(s, l.data, l.count); }
+inline bool operator==(const char *s, literal l) { return l.count && strncmp(s, l.data, l.count); }
+inline bool operator==(literal l, const char *s) { return l.count && strncmp(s, l.data, l.count); }
 inline bool operator!=(const char *s, literal l) { return !(s == l); }
 inline bool operator!=(literal l, const char *s) { return !(s == l); }
 
 inline bool operator==(literal l1, literal l2) {
   if(l1.count == l2.count) {
-    return !strncmp(l1.data, l2.data, l1.count);
+    return strncmp(l1.data, l2.data, l1.count);
   } else {
     return false;
   }
@@ -94,17 +94,43 @@ inline bool operator==(literal l1, literal l2) {
 
 inline bool operator!=(literal l1, literal l2) { return !(l1 == l2); }
 
-inline std::ostream& operator<<(std::ostream &os, literal l) {
-  for(size_t i = 0; i < l.count; i++) {
-    os << l.data[i];
-  }
-  return os;
+literal concat(literal s1, literal s2, literal* s3 = NULL, literal* s4 = NULL) {
+  int l1 = s1.count;
+  int l2 = s2.count;
+  int l3 = (s3) ? s3->count : 0;
+  int l4 = (s4) ? s4->count : 0;
+
+  size_t allocated = l1 + l2 + l3 + l4 + 1;
+  char* r = (char*) alloc(temp_allocator(), allocated);
+  r[allocated] = '\0';
+
+  memcpy(r,      s1.data, l1);
+  memcpy(r + l1, s2.data, l2);
+  if (s3) memcpy(r + l1 + l2,      s3->data, l3);
+  if (s4) memcpy(r + l1 + l2 + l3, s4->data, l4);
+
+  return { r, allocated-1 };
 }
+
+literal strip_file_extension(literal filename) {
+  size_t i;
+  for (i = filename.count-1; i > 0; i--) {
+    if (filename[i] == '.') {
+      break;
+    }
+  }
+
+  literal result;
+  result.data  = filename.data;
+  result.count = i == 0 ? filename.count : i;
+  return result;
+}
+
 
 literal strip_front(literal string) {
   while (string.count) {
     char c = string.data[0];
-    if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r') {
+    if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r' || c == '\n') {
       string.data  += 1;
       string.count -= 1;
     } else {
@@ -125,81 +151,43 @@ const char* make_c_string(literal l) {
   char name[l.count+1] = {}; \
   memcpy(name, l.data, l.count);
 
+// @Incomplete: null-terminator???
 inline char *dynamic_string_from_literal(literal l) {
   char *r = (char *)alloc(l.count+1);
   memcpy(r, l.data, l.count);
   return r;
 }
 
-#define strncpy(...) __strncpy(__VA_ARGS__)
-void __strncpy(char* dst, const char* src, size_t count) {
-  while(*dst = *(src++)) {}
-}
+bool is_digit(char c) {
+  switch (c) {
+  case '0': case '1': case '2': case '3': case '4':
+  case '5': case '6': case '7': case '8': case '9':
+    return true;
 
-inline size_t write_string(char *r, size_t cursor, const char *s, size_t size) {
-  strncpy(r+cursor, s, size);
-  return cursor + size;
-}
-
-inline size_t write_string(char *r, size_t cursor, literal l) {
-  return write_string(r, cursor, l.data, l.count);
-}
-
-inline size_t write_string(char *r, size_t cursor, const char *s) {
-  return write_string(r, cursor, s, len(s));
-}
-
-inline size_t count_format(const char *fmt, va_list args) {
-  return vsnprintf(NULL, 0, fmt, args)+1;
-}
-
-inline size_t count_format(const char *fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  size_t s = count_format(fmt, args);
-  va_end(args);
-  return s;
-}
-
-inline size_t write_format(char *r, size_t cursor, size_t size, const char *fmt, va_list args) {
-  return cursor + vsnprintf(r+cursor, size, fmt, args);
-}
-
-
-inline size_t write_format(char *r, size_t cursor, size_t size, const char *fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-  cursor = write_format(r, cursor, size, fmt, args);
-  va_end(args);
-  return cursor;
-}
-
-
-inline size_t write_format(char *r, size_t cursor, const char *fmt, va_list args) { // unchecked.
-  size_t size;
-  {
-    va_list copy;
-    va_copy(copy, args);
-    size = count_format(fmt, copy);
+  default:
+    return false;
   }
-  return write_format(r, cursor, size, fmt, args);
 }
 
-inline size_t write_format(char *r, size_t cursor, const char *fmt, ...) {
-  size_t size;
-  {
-    va_list args;
-    va_start(args, fmt);
-    size = count_format(fmt, args);
-    va_end(args);
+// @Incomplete: only base 10 for now.
+int string_to_integer(const char* string, char** end = NULL) {
+  if (!string) return 0;
+
+  bool is_negative = *string == '-'; // @Note: I'm always negative.
+  if  (is_negative) string += 1;
+
+  int result = 0;
+  while (is_digit(*string)) {
+    int n = *string - '0';
+
+    // '123' -> (0 * 10 + 1) == 1 -> (1 * 10 + 2) == 12 -> (12 * 10 + 3) == 123 -> ... 
+    result = result * 10 + n;
+
+    string += 1;
   }
-  {
-    va_list args;
-    va_start(args, fmt);
-    size = write_format(r, cursor, size, fmt, args);
-    va_end(args);
-  }
-  return size;
+
+  if (end) *end = (char*) string;
+  return (is_negative) ? -result : result;
 }
 
 void reverse(literal* string) {
@@ -429,6 +417,10 @@ struct Print_Variable {
     literal     string;
   };
 
+  Print_Variable() {
+    type = PRINT_NONE;
+  }
+
   Print_Variable(int8 v) {
     type = PRINT_INT_8;
     i8 = {};
@@ -602,10 +594,27 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
       num_arguments_expected_from_format += 1;
       cursor += format_percent.count;
 
-      if(argument >= num_arguments_passed) { break; }
+      int index;
+      if (is_digit(*cursor)) {
+        char* end;
+        int number = string_to_integer(cursor, &end);
+        if (number >= num_arguments_passed) {
+          // @Incomplete: do better assert, so we can use print inside of our assert.
+          assert(0 && "wrong number provided");
+        }
 
-      Print_Variable v = variables[argument];
-      argument += 1;
+        index    = number;
+        argument = number + 1;
+        cursor   = end;
+
+      } else {
+        if (argument >= num_arguments_passed) { break; }
+
+        index     = argument;
+        argument += 1;
+      }
+
+      Print_Variable v = variables[index];
 
       switch (v.type) {
       case PRINT_INT_8:  put(&builder, (int64) v.i8.value, v.i8.base); break; 
@@ -634,8 +643,10 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
 
   if (num_arguments_passed < num_arguments_expected_from_format) {
     assert(0 && "number of arguments passed in print_to_buffer is less than number of arguments expected from format");
+
   } else if (num_arguments_passed > num_arguments_expected_from_format) {
     assert(0 && "number of arguments passed in print_to_buffer is greater than number of arguments expected from format");
+
   } else {
     if (compare(allocator, temp_allocator())) {
       return { builder.data, builder.size };

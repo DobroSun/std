@@ -19,6 +19,45 @@
 #define abs(a)    (((a) > 0)  ? (a) : -(a))
 #define square(a) ((a)*(a))
 #define clamp(mi, x, ma) (min(max(mi, x), ma))
+// #define lerp
+
+// instrinsics.h
+#define memcpy(...)  __memcpy(__VA_ARGS__)
+#define memcmp(...)  __memcmp(__VA_ARGS__)
+#define strncmp(...) __strncmp(__VA_ARGS__)
+
+void __memcpy(void* dst, const void* src, size_t count) {
+  auto c_dst =       (char*) dst;
+  auto c_src = (const char*) src;
+  while (count) {
+    *c_dst = *c_src; // @Incomplete: @Process8AtATime: we can copy 8 bytes at a time if we use (size_t) instead of (char) (or even more with vectorized stuff.)
+
+    c_dst += 1;
+    c_src += 1;
+    count -= 1;
+  }
+}
+
+bool __memcmp(const void* dst, const void* src, size_t count) {
+  auto c_dst =       (char*) dst;
+  auto c_src = (const char*) src;
+  while (count) {
+    if (*c_dst != *c_src) { // @Process8AtATime: 
+      return false;
+    }
+
+    c_dst += 1;
+    c_src += 1;
+    count -= 1;
+  }
+
+  return true;
+}
+
+bool __strncmp(const char* dst, const char* src, size_t count) {
+  return __memcmp(dst, src, count);
+}
+// 
 
 
 struct Source_Location {
