@@ -27,7 +27,7 @@ Allocator logging_allocator(struct Allocation_Storage*);
 Allocator logging_allocator();
 Allocator memory_arena_allocator(struct Memory_Arena*);
 Allocator temporary_storage_allocator(struct Temporary_Storage*);
-void      report_all_memory_leaks(array<struct Allocation_Chunk>);
+void      report_all_memory_leaks();
 
 
 struct Memory_Arena {
@@ -57,9 +57,6 @@ struct Allocation_Storage {
   }
 
   ~Allocation_Storage() {
-    if (should_report_memory_leaks) {
-      report_all_memory_leaks(error_reports);
-    }
     array_free(&error_reports);
   }
 };
@@ -215,7 +212,7 @@ void* temporary_reallocate(void* data, void* ptr, size_t bytes, Source_Location 
 }
 
 void begin_temporary_storage(Temporary_Storage* storage, size_t bytes = 5e6) {
-  begin_memory_arena(&storage->arena);
+  begin_memory_arena(&storage->arena, bytes);
   storage->arena.allocator = temporary_storage_allocator(storage);
   storage->highest_water_mark = 0;
 }

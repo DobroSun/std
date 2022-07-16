@@ -64,7 +64,7 @@ struct literal {
 inline literal XXX_visual_studio_sucks(const char* x, size_t s) { return { x, s }; }
 #define make_literal(x) XXX_visual_studio_sucks((x), sizeof(x)-1)
 
-int len(const char* s) {
+size_t len(const char* s) {
   if (s) {
     const char* e = s;
     while (*e != '\0') {
@@ -363,8 +363,8 @@ void __my_assert(Source_Location loc, bool expression, const char* message, Args
     // @Incomplete: ? we can't use our print & tprints in there, because of how temporary_allocations work, we can't reallocate 2 or more arrays at once, just one at a time.
     // but when we call print from inside another print, we do exactly that and crash.
     // 
-    const char* format = "\r" red("Assertion failed") ": %, file %, function %, line %\n";
-    literal     string = sprint(format, sprint(message, args...), loc.file, loc.function, loc.line);
+    const char* format = "\r" red("Assertion failed") ": %0%1file %, function %, line %\n";
+    literal     string = sprint(format, sprint(message, args...), len(message) ? ", " : "", loc.file, loc.function, loc.line);
     print_string(string);
 
     __debugbreak(); // @Incomplete: @MSVCOnly: well, it is just `cc` instruction, so why can't we do that in other compilers? 
@@ -826,7 +826,9 @@ define_functor2(logic_not, !);
 define_functor2(bit_not, ~);
 
 
-void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
+void report_all_memory_leaks() {
+  auto error_reports = allocation_storage.error_reports;
+
   size_t total = 0;
   for(Allocation_Chunk it : error_reports) {
     if(it.allocated) {
