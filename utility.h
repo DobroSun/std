@@ -95,6 +95,15 @@ inline bool operator==(literal l1, literal l2) {
 
 inline bool operator!=(literal l1, literal l2) { return !(l1 == l2); }
 
+
+literal get_end_of_line_symbol() {
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+  return make_literal("\r\n");
+#else
+  return make_literal("\n");
+#endif
+}
+
 literal concat(literal s1, literal s2, literal* s3 = NULL, literal* s4 = NULL) {
   int l1 = s1.count;
   int l2 = s2.count;
@@ -127,10 +136,24 @@ literal strip_file_extension(literal filename) {
   return result;
 }
 
-
-literal strip_front(literal string) {
+int count_empty_symbols_at_front(literal string) {
+  int counter = 0;
   while (string.count) {
-    char c = string.data[0];
+    char c = *string.data;
+    if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r' || c == '\n') {
+      string.data  += 1;
+      string.count -= 1;
+      counter++;
+    } else {
+      break;
+    }
+  }
+  return counter;
+}
+
+literal strip_empty_symbols_at_front(literal string) {
+  while (string.count) {
+    char c = *string.data;
     if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r' || c == '\n') {
       string.data  += 1;
       string.count -= 1;
@@ -139,6 +162,62 @@ literal strip_front(literal string) {
     }
   }
   return string;
+}
+
+literal strip_empty_symbols_at_front(literal string, int max_symbols_to_strip) {
+  while (string.count) {
+    char c = *string.data;
+    if (c == ' ' || c == '\t' || c == '\v' || c == '\b' || c == '\r' || c == '\n') {
+      if (max_symbols_to_strip > 0) {
+        string.data  += 1;
+        string.count -= 1;
+        max_symbols_to_strip -= 1;
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return string;
+}
+
+array<literal> strip_empty_symbols_at_front(array<literal> lines, int max_symbols_to_strip) {
+  for (size_t i = 0; i < lines.size; i++) {
+    lines[i] = strip_empty_symbols_at_front(lines[i], max_symbols_to_strip);
+  }
+  return lines;
+}
+
+
+array<literal> split_lines(literal string) {
+  array<literal> lines;
+  lines.allocator = temp_allocator();
+
+  literal end_of_line = get_end_of_line_symbol();
+
+  literal cursor = string;
+  literal line   = string;
+  while (cursor.count) {
+    if (cursor.data == end_of_line) {
+      line.count = cursor.data - line.data;
+      array_add(&lines, line);
+
+      cursor.data  += end_of_line.count;
+      cursor.count -= end_of_line.count;
+
+      line = cursor;
+      continue;
+    }
+
+    cursor.data  += 1;
+    cursor.count -= 1;
+  }
+
+  if (line.data && line.count) {
+    array_add(&lines, line);
+  }
+  return lines;
 }
 
 const char* make_c_string(literal l) { 
@@ -582,6 +661,9 @@ Print_Formatted_Float<T> formatted_float(T value, int number_of_digits_after_dec
   return { value, number_of_digits_after_decimal_point };
 }
 
+// 
+// @Incomplete: do print_to_builder, because that is way smarter, ...
+// 
 literal print_to_buffer(Allocator allocator, const char* format) {
   if (!format) return {};
 
@@ -849,4 +931,26 @@ void report_all_memory_leaks() {
 
 literal print_source_location(Source_Location loc) {
   return tprint("%: %: %", loc.file, loc.line, loc.function);
+}
+
+literal concatenate(array<literal> lines) {
+  literal end_of_line = get_end_of_line_symbol();
+
+  String_Builder builder;
+  builder.allocator = temp_allocator();
+
+  size_t count = 0;
+  for (literal i: lines) {
+    count += i.count + end_of_line.count;
+  }
+
+  ensure_space(&builder, count);
+
+  // @Incomplete: use print_to_builder.
+  for (literal i: lines) {
+    put(&builder, i);
+    put(&builder, end_of_line);
+  }
+
+  return { builder.data, builder.size };
 }
