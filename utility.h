@@ -712,10 +712,7 @@ void print(const char* format, Args... args) {
   // 
   // @Incomplete: use Temporary_Storage::get_water_mark() and ::set_water_mark(); because print is going to be used a LOT!
   // 
-  literal result = tprint(format, args...);
-
-  DWORD written;
-  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), result.data, result.count, &written, NULL);
+  print_string(tprint(format, args...));
 }
 
 void print(Print_Variable v) {
@@ -723,8 +720,10 @@ void print(Print_Variable v) {
 }
 
 void print_string(literal string) {
-  DWORD written;
-  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), string.data, string.count, &written, NULL);
+  if (string.data && string.count) {
+    DWORD written;
+    WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), string.data, string.count, &written, NULL);
+  }
 }
 
 struct Timer {
