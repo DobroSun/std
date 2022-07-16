@@ -26,6 +26,8 @@
 #define memcmp(...)  __memcmp(__VA_ARGS__)
 #define strncmp(...) __strncmp(__VA_ARGS__)
 
+#define my_assert(...) __my_assert( { __LINE__, __FILE__, __FUNCTION__ }, __VA_ARGS__)
+
 void __memcpy(void* dst, const void* src, size_t count) {
   auto c_dst =       (char*) dst;
   auto c_src = (const char*) src;

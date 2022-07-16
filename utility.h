@@ -6,6 +6,7 @@
 #define TB(x) 1024*GB(x)
 
 
+
 void swap(void* a, void* b, size_t size_of) {
   u8 *t = (u8*) alloca(size_of);
   memcpy(t, a, size_of);
@@ -54,7 +55,7 @@ struct literal {
   size_t      count;
 
   char operator[](size_t i) const {
-    assert(i < count);
+    my_assert(i < count, "Index out of range! Expected in range (0, %), but passed %", (int64) count-1, i);
     return data[i];
   }
 };
@@ -295,12 +296,8 @@ int float_to_string(double fp, int number_of_digits_after_decimal_point, char* s
   return decimal_index + number_of_digits_after_decimal_point;
 }
 
-void ftoa(float f, const char* string) {
-  ftoa((double) f, string);
-}
 
-
-typedef array<char> String_Builder;
+typedef array<char> String_Builder; // @Incomplete: do the real thing, Bucket_Array or smth.
 
 static int32 indentation_level = 0;
 
@@ -321,7 +318,7 @@ void put(String_Builder* builder, int64 a, int base) {
 
   int count = integer_to_string(a, base, builder->data + builder->size);
 
-  assert(count < 32);
+  my_assert(count < 32, "");
   builder->size += count;
 }
 
@@ -330,7 +327,7 @@ void put(String_Builder* builder, uint64 a, int base) {
 
   int count = uinteger_to_string(a, base, builder->data + builder->size);
 
-  assert(count < 32);
+  my_assert(count < 32, "");
   builder->size += count;
 }
 
@@ -339,7 +336,7 @@ void put(String_Builder* builder, float64 a, int number_of_digits_after_decimal_
 
   int count = float_to_string(a, number_of_digits_after_decimal_point, builder->data + builder->size);
 
-  assert(count < 32);
+  my_assert(count < 32, "");
   builder->size += count;
 }
 
@@ -350,6 +347,29 @@ void put_spaces(String_Builder* builder) {
 
   literal l = { spaces, (size_t)indentation_level };
   put(builder, l);
+}
+
+template<class... Args>
+literal sprint(const char* format, Args... args);
+
+void print_string(literal string);
+
+template<class ...Args>
+void __my_assert(Source_Location loc, bool expression, const char* message, Args... args) {
+  if (!expression) {
+    // 
+    // @MemoryLeak: sprint(...)
+    // 
+    // @Incomplete: ? we can't use our print & tprints in there, because of how temporary_allocations work, we can't reallocate 2 or more arrays at once, just one at a time.
+    // but when we call print from inside another print, we do exactly that and crash.
+    // 
+    const char* format = "\r" red("Assertion failed") ": %, file %, function %, line %\n";
+    literal     string = sprint(format, sprint(message, args...), loc.file, loc.function, loc.line);
+    print_string(string);
+
+    __debugbreak(); // @Incomplete: @MSVCOnly: well, it is just `cc` instruction, so why can't we do that in other compilers? 
+    ExitProcess(1); // @Incomplete: is `1` a real error code? look this up in documentation.
+  }
 }
 
 
@@ -370,7 +390,6 @@ enum Print_Type {
   PRINT_LITERAL,
 };
 
-// @Incomplete: what about different types?
 template<class T>
 struct Print_Formatted_Integer {
   T value;
@@ -563,6 +582,42 @@ Print_Formatted_Float<T> formatted_float(T value, int number_of_digits_after_dec
   return { value, number_of_digits_after_decimal_point };
 }
 
+literal print_to_buffer(Allocator allocator, const char* format) {
+  if (!format) return {};
+
+  int num_arguments_passed = 0;
+  int num_arguments_expected_from_format = 0;
+
+  const char* cursor = format;
+  while (1) {
+    literal format_percent = make_literal("%");
+    literal double_percent = make_literal("%%");
+
+    if (*cursor == '\0') { break; }
+
+    if (cursor == double_percent) {
+      cursor += double_percent.count;
+
+    } else if (cursor == format_percent) {
+      num_arguments_expected_from_format += 1;
+      cursor += format_percent.count;
+
+      if (is_digit(*cursor)) {
+        char* end;
+        int number = string_to_integer(cursor, &end);
+        my_assert(number < num_arguments_passed, "print_to_buffer expected index in range (0, %), but got %", num_arguments_passed-1, number);
+
+        cursor = end;
+      }
+    } else {
+      cursor += 1;
+    }
+  }
+
+  my_assert(num_arguments_passed == num_arguments_expected_from_format, "print_to_buffer expected % number of arguments from format, but % arguments was passed", num_arguments_expected_from_format, num_arguments_passed);
+  return { format, (size_t) len(format) };
+}
+
 template<class... Args>
 literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
   if (!format) return {};
@@ -576,7 +631,7 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
   // @Incomplete: no need to use String_Builder here, just use plain array<char>.
   // 
   String_Builder builder;
-  builder.allocator = temp_allocator();
+  builder.allocator = allocator;
 
   int argument       = 0;
   const char* cursor = format;
@@ -598,17 +653,14 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
       if (is_digit(*cursor)) {
         char* end;
         int number = string_to_integer(cursor, &end);
-        if (number >= num_arguments_passed) {
-          // @Incomplete: do better assert, so we can use print inside of our assert.
-          assert(0 && "wrong number provided");
-        }
+        my_assert(number < num_arguments_passed, "print_to_buffer expected index in range (0, %), but got %", num_arguments_passed-1, number);
 
         index    = number;
         argument = number + 1;
         cursor   = end;
 
       } else {
-        if (argument >= num_arguments_passed) { break; }
+        if (argument >= num_arguments_passed) { break; } // @Incomplete: we just break in there, but what if we did %200, and then got in there with 201 that doesn't exist? We will report some stupid error message confusing everyone around.
 
         index     = argument;
         argument += 1;
@@ -641,24 +693,8 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
     }
   }
 
-  if (num_arguments_passed < num_arguments_expected_from_format) {
-    assert(0 && "number of arguments passed in print_to_buffer is less than number of arguments expected from format");
-
-  } else if (num_arguments_passed > num_arguments_expected_from_format) {
-    assert(0 && "number of arguments passed in print_to_buffer is greater than number of arguments expected from format");
-
-  } else {
-    if (compare(allocator, temp_allocator())) {
-      return { builder.data, builder.size };
-    } else {
-      literal l;
-      l.data  = (const char*) alloc(allocator, builder.size);;
-      l.count = builder.size;
-      memcpy((void*) l.data, builder.data, builder.size);
-      return l;
-    }
-  }
-  return {};
+  my_assert(num_arguments_passed == num_arguments_expected_from_format, "print_to_buffer expected % number of arguments from format, but % arguments was passed", num_arguments_expected_from_format, num_arguments_passed);
+  return { builder.data, builder.size };
 }
 
 template<class... Args>
@@ -682,13 +718,13 @@ void print(const char* format, Args... args) {
   WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), result.data, result.count, &written, NULL);
 }
 
-void print(const char* format) {
-  DWORD written;
-  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), format, len(format), &written, NULL);
-}
-
 void print(Print_Variable v) {
   print("%\n", v);
+}
+
+void print_string(literal string) {
+  DWORD written;
+  WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), string.data, string.count, &written, NULL);
 }
 
 struct Timer {
@@ -808,4 +844,8 @@ void report_all_memory_leaks(array<Allocation_Chunk> error_reports) {
   } else {
     print("Total memory leaked: %\n", print_number_in_bytes(total));
   }
+}
+
+literal print_source_location(Source_Location loc) {
+  return tprint("%: %: %", loc.file, loc.line, loc.function);
 }

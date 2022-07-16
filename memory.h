@@ -1,5 +1,11 @@
 #pragma once
 
+template<class ...Args>
+void __my_assert(Source_Location loc, bool expression, const char* message, Args... args);
+
+// 
+// @Incomplete: be careful with using my_asserts in allocators code, because it might cause some bugs if we couldn't allocate memory and we are going to try to allocate even more for a print.
+// 
 
 // 
 //
@@ -167,7 +173,7 @@ void* arena_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc)
   if (ptr) {
     size_t how_much_was_allocated_before = ((char*) arena->memory + arena->top) - ptr;
     arena->top += bytes - how_much_was_allocated_before;
-    assert(bytes > how_much_was_allocated_before);
+    my_assert(bytes > how_much_was_allocated_before, "This data was already reallocated somewhere else. Bytes to allocte := %, How much was already allocated := %", bytes, how_much_was_allocated_before);
     return ptr;
   } else {
     return arena_allocate(data, bytes, loc);
