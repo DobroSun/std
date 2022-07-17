@@ -5,6 +5,9 @@
 
 #define temp_array(type, N) { (type*) alloca(sizeof(type) * N), N, N, get_global_allocator() }
 
+
+void swap(void*, void*, size_t);
+
 // start static_array
 template<class T, uint64 N>
 T* array_first(static_array<T, N>* a) {
@@ -78,28 +81,26 @@ T* array_add_(array<T>* a, T v, Source_Location loc) {
 
 template<class T>
 void array_add_(array<T>* a, T* v, Source_Location loc) {
+  size_t count = 0;
   while (*v) {
-    array_add_(a, *v, loc);
     v++;
+    count++;
   }
+
+  array_add_(a, v, count, loc);
 }
 
 template<class T>
 void array_add_(array<T>* a, T* v, size_t s, Source_Location loc) {
-  size_t i = 0;
-  while (i < s) {
-    array_add_(a, v[i], loc);
-    i++;
-  }
+  array_ensure_capacity_(a, a->size + s, loc);
+  memcpy(a->data + a->size, v, sizeof(T) * s);
+  a->size += s;
 }
 
 template<class T>
 void array_add_(array<T>* a, const array<T>* b, Source_Location loc) {
-  if (a->size + b->size > a->capacity) {
-    size_t new_capacity = a->size + b->size;
-    array_reserve_(a, new_capacity, loc);
-  }
-  memmove(a->data + a->size, b->data, sizeof(T) * b->size); // @Incomplete: memcpy
+  array_ensure_capacity_(a, a->size + b->size, loc);
+  memcpy(a->data + a->size, b->data, sizeof(T) * b->size);
   a->size += b->size;
 }
 
@@ -109,6 +110,13 @@ void array_add_unique_(array<T>* a, T v, Source_Location loc) {
     return;
   } else {
     array_add_(a, v, loc);
+  }
+}
+
+template<class T>
+void array_ensure_capacity_(array<T>* a, size_t n, Source_Location loc) {
+  if (n > a->capacity) {
+    array_reserve_(a, n, loc);
   }
 }
 
@@ -158,8 +166,8 @@ T* array_remove(array<T>* a, size_t index) {
   s64 size_to_copy = a->size - index;
 
   T tmp[size_to_copy];
-  memmove(tmp, a->data+index+1, sizeof(tmp)); // @CleanUp: memmove?
-  memmove(a->data+index, tmp, sizeof(tmp));
+  memcpy(tmp, a->data+index+1, sizeof(tmp));
+  memcpy(a->data+index, tmp, sizeof(tmp));
   return r;
 }
 
@@ -196,7 +204,7 @@ void array_copy(array<T>* a, const array<T>* b) {
     a->data     = (T*) alloc(a->allocator, sizeof(T)*b->capacity);
     a->capacity = b->capacity;
   }
-  memmove(a->data, b->data, sizeof(T)*b->size);
+  memcpy(a->data, b->data, sizeof(T)*b->size);
   a->size = b->size;
 }
 
@@ -206,7 +214,7 @@ array<T> array_copy(const array<T>* b) {
   a.data     = (T*) alloc(a.allocator, sizeof(T)*b->capacity);
   a.size     = b->size;
   a.capacity = b->capacity;
-  memmove(a.data, b->data, sizeof(T)*b->size);
+  memcpy(a.data, b->data, sizeof(T)*b->size);
   return a;
 }
 
@@ -224,7 +232,27 @@ void array_copy_range(array<T>* a, const array<T>* b, size_t first, size_t last)
   assert(first <= b->size && last <= b->size);
   size_t size = last - first;
   array_resize(a, size);
-  memmove(a->data, &b->data[first], sizeof(T) * size);
+  memcpy(a->data, &b->data[first], sizeof(T) * size);
+}
+
+template<class T, class F>
+void array_sort(array<T>* a, F f) {
+  // 
+  // @Incomplete: copy&paste real sort in here.
+  // 
+
+  for (size_t i = 0; i < a->size; i++) {
+    T* current = &(*a)[i];
+
+    for (size_t j = 0; j < a->size; j++) {
+      if (i == j) continue;
+
+      T* test_with = &(*a)[j];
+      if (f(*current, *test_with)) {
+        swap(current, test_with, sizeof(T));
+      }
+    }
+  }
 }
 
 template<class T>

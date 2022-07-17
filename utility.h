@@ -381,7 +381,7 @@ typedef array<char> String_Builder; // @Incomplete: do the real thing, Bucket_Ar
 static int32 indentation_level = 0;
 
 void ensure_space(String_Builder* builder, int space) {
-  array_reserve(builder, builder->size + space);
+  array_ensure_capacity(builder, builder->size + space);
 }
 
 void put(String_Builder* builder, literal s) {
@@ -467,6 +467,7 @@ enum Print_Type {
   PRINT_VOID_POINTER,
   PRINT_C_STRING,
   PRINT_LITERAL,
+  PRINT_ARRAY,
 };
 
 template<class T>
@@ -513,143 +514,208 @@ struct Print_Variable {
 
     const char* c_string;
     literal     string;
+    array<Print_Variable> dyn_array;
   };
-
-  Print_Variable() {
-    type = PRINT_NONE;
-  }
-
-  Print_Variable(int8 v) {
-    type = PRINT_INT_8;
-    i8 = {};
-    i8.value = v;
-  }
-
-  Print_Variable(int16 v) {
-    type = PRINT_INT_16;
-    i16 = {};
-    i16.value = v;
-  }
-
-  Print_Variable(int32 v) {
-    type = PRINT_INT_32;
-    i32 = {};
-    i32.value = v;
-  }
-
-  Print_Variable(int64 v) {
-    type = PRINT_INT_64;
-    i64 = {};
-    i64.value = v;
-  }
-
-  Print_Variable(uint8 v) {
-    type = PRINT_UINT_8;
-    u8 = {};
-    u8.value = v;
-  }
-
-  Print_Variable(uint16 v) {
-    type = PRINT_UINT_16;
-    u16 = {};
-    u16.value = v;
-  }
-
-  Print_Variable(uint32 v) {
-    type = PRINT_UINT_32;
-    u32 = {};
-    u32.value = v;
-  }
-
-  Print_Variable(uint64 v) {
-    type = PRINT_UINT_64;
-    u64 = {};
-    u64.value = v;
-  }
-
-  Print_Variable(float32 v) {
-    type = PRINT_FLOAT_32;
-    f32 = {};
-    f32.value = v;
-  }
-
-  Print_Variable(float64 v) {
-    type = PRINT_FLOAT_64;
-    f64 = {};
-    f64.value = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<int8> v) {
-    type = PRINT_INT_8;
-    i8 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<int16> v) {
-    type = PRINT_INT_16;
-    i16 = v;
-  }
-
-
-  Print_Variable(Print_Formatted_Integer<int32> v) {
-    type = PRINT_INT_32;
-    i32 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<int64> v) {
-    type = PRINT_INT_64;
-    i64 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<uint8> v) {
-    type = PRINT_UINT_8;
-    u8 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<uint16> v) {
-    type = PRINT_UINT_16;
-    u16 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<uint32> v) {
-    type = PRINT_UINT_32;
-    u32 = v;
-  }
-
-  Print_Variable(Print_Formatted_Integer<uint64> v) {
-    type = PRINT_UINT_64;
-    u64 = v;
-  }
-
-  Print_Variable(Print_Formatted_Float<float32> v) {
-    type = PRINT_FLOAT_32;
-    f32 = v;
-  }
-
-  Print_Variable(Print_Formatted_Float<float64> v) {
-    type = PRINT_FLOAT_64;
-    f64 = v;
-  }
-
-  Print_Variable(void* v) {
-    type = PRINT_VOID_POINTER;
-    pointer = v;
-  }
-
-  Print_Variable(const char* v) {
-    type = PRINT_C_STRING;
-    c_string = v;
-  }
-
-  Print_Variable(char* v) {
-    type = PRINT_C_STRING;
-    c_string = v;
-  }
-
-  Print_Variable(literal v) {
-    type = PRINT_LITERAL;
-    string = v;
-  }
 };
+
+Print_Variable init_print_variable() {
+  return {};
+}
+
+Print_Variable init_print_variable(int8 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_8;
+  p.i8 = {};
+  p.i8.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(int16 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_16;
+  p.i16 = {};
+  p.i16.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(int32 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_32;
+  p.i32 = {};
+  p.i32.value = v;
+  return p;
+}
+Print_Variable init_print_variable(int64 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_64;
+  p.i64 = {};
+  p.i64.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(uint8 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_8;
+  p.u8 = {};
+  p.u8.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(uint16 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_16;
+  p.u16 = {};
+  p.u16.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(uint32 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_32;
+  p.u32 = {};
+  p.u32.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(uint64 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_64;
+  p.u64 = {};
+  p.u64.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(float32 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_FLOAT_32;
+  p.f32 = {};
+  p.f32.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(float64 v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_FLOAT_64;
+  p.f64 = {};
+  p.f64.value = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<int8> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_8;
+  p.i8 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<int16> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_16;
+  p.i16 = v;
+  return p;
+}
+
+
+Print_Variable init_print_variable(Print_Formatted_Integer<int32> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_32;
+  p.i32 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<int64> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_INT_64;
+  p.i64 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<uint8> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_8;
+  p.u8 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<uint16> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_16;
+  p.u16 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<uint32> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_32;
+  p.u32 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Integer<uint64> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_UINT_64;
+  p.u64 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Float<float32> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_FLOAT_32;
+  p.f32 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(Print_Formatted_Float<float64> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_FLOAT_64;
+  p.f64 = v;
+  return p;
+}
+
+Print_Variable init_print_variable(void* v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_VOID_POINTER;
+  p.pointer = v;
+  return p;
+}
+
+Print_Variable init_print_variable(const char* v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_C_STRING;
+  p.c_string = v;
+  return p;
+}
+
+Print_Variable init_print_variable(char* v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_C_STRING;
+  p.c_string = v;
+  return p;
+}
+
+Print_Variable init_print_variable(literal v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_LITERAL;
+  p.string = v;
+  return p;
+}
+
+template<class T>
+Print_Variable init_print_variable(array<T> v) {
+  Print_Variable p = init_print_variable();
+  p.type = PRINT_ARRAY;
+  p.dyn_array = {};
+  for (T pp : v) {
+    array_add(&p.dyn_array, init_print_variable(pp));
+  }
+  return p;
+}
+
+void deinit_print_variable(Print_Variable v) {
+  if (v.type == PRINT_ARRAY) {
+    array_free(&v.dyn_array);
+  }
+}
 
 template<class T>
 Print_Formatted_Integer<T> formatted_int(T value, int base = 10) {
@@ -659,6 +725,36 @@ Print_Formatted_Integer<T> formatted_int(T value, int base = 10) {
 template<class T>
 Print_Formatted_Float<T> formatted_float(T value, int number_of_digits_after_decimal_point = 5) {
   return { value, number_of_digits_after_decimal_point };
+}
+
+void print_variable(String_Builder* builder, Print_Variable v) {
+  switch (v.type) {
+  case PRINT_INT_8:  put(builder, (int64) v.i8.value, v.i8.base); break; 
+  case PRINT_INT_16: put(builder, (int64) v.i16.value, v.i16.base); break;
+  case PRINT_INT_32: put(builder, (int64) v.i32.value, v.i32.base); break;
+  case PRINT_INT_64: put(builder, (int64) v.i64.value, v.i64.base); break;
+
+  case PRINT_UINT_8:  put(builder, (uint64) v.u8.value, v.u8.base); break;
+  case PRINT_UINT_16: put(builder, (uint64) v.u16.value, v.u16.base); break;
+  case PRINT_UINT_32: put(builder, (uint64) v.u32.value, v.u32.base); break;
+  case PRINT_UINT_64: put(builder, (uint64) v.u64.value, v.u64.base); break;
+
+  case PRINT_FLOAT_32: put(builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
+  case PRINT_FLOAT_64: put(builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
+
+  case PRINT_VOID_POINTER: put(builder, make_literal("0x")); put(builder, (uint64) v.pointer, 16); break;
+  case PRINT_C_STRING    : put(builder, v.c_string); break;
+  case PRINT_LITERAL     : put(builder, v.string);   break;
+  case PRINT_ARRAY       : {
+    put(builder, "[");
+    for (size_t i = 0; i < v.dyn_array.size; i++) {
+      print_variable(builder, v.dyn_array[i]);
+      put(builder, (i != v.dyn_array.size-1) ? ", " : "");
+    }
+    put(builder, "]");
+    break;
+  }
+  }
 }
 
 // 
@@ -704,7 +800,12 @@ template<class... Args>
 literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
   if (!format) return {};
 
-  Print_Variable variables[] = { Print_Variable(args)... };
+  Print_Variable variables[] = { init_print_variable(args)... };
+  defer {
+    for (size_t i = 0; i < static_array_size(variables); i++) {
+      deinit_print_variable(variables[i]);
+    }
+  };
 
   int num_arguments_passed = static_array_size(variables);
   int num_arguments_expected_from_format = 0;
@@ -749,25 +850,7 @@ literal print_to_buffer(Allocator allocator, const char* format, Args... args) {
       }
 
       Print_Variable v = variables[index];
-
-      switch (v.type) {
-      case PRINT_INT_8:  put(&builder, (int64) v.i8.value, v.i8.base); break; 
-      case PRINT_INT_16: put(&builder, (int64) v.i16.value, v.i16.base); break;
-      case PRINT_INT_32: put(&builder, (int64) v.i32.value, v.i32.base); break;
-      case PRINT_INT_64: put(&builder, (int64) v.i64.value, v.i64.base); break;
-
-      case PRINT_UINT_8:  put(&builder, (uint64) v.u8.value, v.u8.base); break;
-      case PRINT_UINT_16: put(&builder, (uint64) v.u16.value, v.u16.base); break;
-      case PRINT_UINT_32: put(&builder, (uint64) v.u32.value, v.u32.base); break;
-      case PRINT_UINT_64: put(&builder, (uint64) v.u64.value, v.u64.base); break;
-
-      case PRINT_FLOAT_32: put(&builder, (float64) v.f32.value, v.f32.number_of_digits_after_decimal_point); break;;
-      case PRINT_FLOAT_64: put(&builder, (float64) v.f64.value, v.f64.number_of_digits_after_decimal_point); break;
-
-      case PRINT_VOID_POINTER: put(&builder, make_literal("0x")); put(&builder, (uint64) v.pointer, 16); break;
-      case PRINT_C_STRING:     put(&builder, v.c_string); break;
-      case PRINT_LITERAL:      put(&builder, v.string);   break;
-      }
+      print_variable(&builder, v);
 
     } else {
       put(&builder, { cursor, 1 });
@@ -797,10 +880,6 @@ void print(const char* format, Args... args) {
   print_string(tprint(format, args...));
 }
 
-void print(Print_Variable v) {
-  print("%\n", v);
-}
-
 void print_string(literal string) {
   if (string.data && string.count) {
     DWORD written;
@@ -818,7 +897,7 @@ struct Timer {
   
     double delta = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     literal print_number_in_seconds(double);
-    print(print_number_in_seconds(delta));
+    print("%", print_number_in_seconds(delta));
   }
 };
 

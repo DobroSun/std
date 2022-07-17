@@ -170,7 +170,7 @@ void* arena_reallocate(void* data, void* ptr, size_t bytes, Source_Location loc)
   if (ptr) {
     size_t how_much_was_allocated_before = ((char*) arena->memory + arena->top) - ptr;
     arena->top += bytes - how_much_was_allocated_before;
-    my_assert(bytes > how_much_was_allocated_before, "This data was already reallocated somewhere else. Bytes to allocte := %, How much was already allocated := %", bytes, how_much_was_allocated_before);
+    __my_assert(loc, bytes > how_much_was_allocated_before, "This data was already reallocated somewhere else. Bytes to allocte := %, How much was already allocated := %", bytes, how_much_was_allocated_before);
     return ptr;
   } else {
     return arena_allocate(data, bytes, loc);
